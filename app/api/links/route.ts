@@ -16,76 +16,100 @@ interface LinksData {
   categories: string[]
 }
 
+async function getLinks(): Promise<Link[]> {
+  const linksRef = ref(database, 'links');
+  const snapshot = await get(linksRef);
+  if (!snapshot.exists()) {
+    return [];
+  }
+  const rawLinks: any[] = Array.isArray(snapshot.val()) ? snapshot.val() : Object.values(snapshot.val()); // Handle both array and object structures
+  // Validate links (similar to previous validation)
+  const validatedLinks = rawLinks.filter((link: any): link is Link => 
+      link && 
+      typeof link.id === 'number' && 
+      typeof link.name === 'string' && 
+      typeof link.original === 'string' &&
+      typeof link.converted === 'string' &&
+      typeof link.category === 'string' &&
+      typeof link.createdAt === 'string'
+  );
+  return validatedLinks;
+}
+
+async function getCategories(): Promise<string[]> {
+  const categoriesRef = ref(database, 'categories');
+  const snapshot = await get(categoriesRef);
+  if (!snapshot.exists()) {
+    return [];
+  }
+  const rawCategories: any[] = Array.isArray(snapshot.val()) ? snapshot.val() : [];
+  // Validate categories
+  const categories: string[] = Array.from(
+    new Set(
+      rawCategories
+        .map(cat => typeof cat === 'string' ? cat.trim() : '')
+        .filter(cat => cat !== '')
+    )
+  );
+  return categories;
+}
+
 async function getLinksData(): Promise<LinksData> {
-  console.log('Attempting to read from Firebase path: /links');
+  console.log('Attempting to read from Firebase paths: /links and /categories');
   try {
-    const linksRef = ref(database, 'links');
-    const snapshot = await get(linksRef);
+    // Fetch links and categories in parallel
+    const [links, categories] = await Promise.all([
+      getLinks(),
+      getCategories()
+    ]);
 
-    if (!snapshot.exists()) {
-      console.log('Firebase path /links does not exist. Returning empty data.');
-      return { links: [], categories: [] };
-    }
-
-    const data = snapshot.val();
-    console.log('Raw data retrieved from Firebase:', JSON.stringify(data, null, 2));
-
-    // Validate and normalize the data structure
-    const rawLinks: any[] = Array.isArray(data?.links) ? data.links : [];
-    const rawCategories: any[] = Array.isArray(data?.categories) ? data.categories : [];
-
-    // Filter categories to ensure they are unique, non-empty strings
-    const categories: string[] = Array.from(
-      new Set(
-        rawCategories
-          .map(cat => typeof cat === 'string' ? cat.trim() : '') // Convert to trimmed string or empty
-          .filter(cat => cat !== '') // Filter out empty strings
-      )
-    );
-
-    // Validate each link object
-    const validatedLinks = rawLinks.filter((link: any): link is Link => 
-        link && 
-        typeof link.id === 'number' && 
-        typeof link.name === 'string' && 
-        typeof link.original === 'string' &&
-        typeof link.converted === 'string' &&
-        typeof link.category === 'string' &&
-        typeof link.createdAt === 'string'
-    );
-
-    if (validatedLinks.length !== rawLinks.length) {
-        console.warn('Some link objects were invalid and filtered out.');
-    }
-
-    const structuredData: LinksData = { links: validatedLinks, categories };
-    console.log('Returning structured data:', JSON.stringify(structuredData, null, 2));
+    const structuredData: LinksData = { links, categories };
+    console.log('Returning combined structured data:', JSON.stringify(structuredData, null, 2));
     return structuredData;
 
   } catch (error) {
     console.error('Error reading from Firebase in getLinksData:', error);
-    throw error; 
+    throw error;
   }
 }
 
-async function saveLinksData(data: LinksData) {
+async function saveLinks(links: Link[]) {
   try {
-    const linksRef = ref(database, 'links')
-    await set(linksRef, data)
+    const linksRef = ref(database, 'links');
+    console.log('Saving links to Firebase path /links:', links);
+    // Convert array to object for Firebase if preferred, or save as array
+    // const linksObject = links.reduce((acc, link) => ({...acc, [link.id]: link }), {});
+    // await set(linksRef, linksObject); // Use this line if saving as object
+    await set(linksRef, links); // Saving as array
+    console.log('Links saved successfully');
   } catch (error) {
-    console.error('Error writing to Firebase:', error)
-    throw new Error('Failed to save data to Firebase')
+    console.error('Error writing links to Firebase:', error);
+    throw new Error('Failed to save links data to Firebase');
+  }
+}
+
+async function saveCategories(categories: string[]) {
+  try {
+    const categoriesRef = ref(database, 'categories');
+    // Ensure uniqueness and filter empty strings again before saving
+    const validCategories = Array.from(new Set(categories.filter(c => typeof c === 'string' && c.trim() !== '')));
+    console.log('Saving categories to Firebase path /categories:', validCategories);
+    await set(categoriesRef, validCategories);
+    console.log('Categories saved successfully');
+  } catch (error) {
+    console.error('Error writing categories to Firebase:', error);
+    throw new Error('Failed to save categories data to Firebase');
   }
 }
 
 export async function GET() {
   try {
     console.log('GET /api/links request received');
-    const data = await getLinksData();
+    // Now uses the updated getLinksData which reads from both paths
+    const data = await getLinksData(); 
     return NextResponse.json(data);
   } catch (error) {
     console.error('Error in GET /api/links:', error);
-    // Provide more details in the error response
     return NextResponse.json({
       error: 'Failed to read links data',
       details: error instanceof Error ? error.message : 'Unknown error occurred'
@@ -94,6 +118,7 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  // !!! THIS FUNCTION NEEDS UPDATING !!!
   try {
     const { original, name, category } = await request.json()
     
@@ -101,17 +126,14 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Original URL and name are required' }, { status: 400 })
     }
 
-    const data = await getLinksData()
+    // Fetch current data (links and categories separately)
+    const currentLinks = await getLinks();
+    const currentCategories = await getCategories();
     
-    // Generate a new ID
-    const newId = data.links.length > 0 ? Math.max(...data.links.map(l => l.id)) + 1 : 1
-    
-    // Determine the category, defaulting to 'Uncategorized'
+    const newId = currentLinks.length > 0 ? Math.max(...currentLinks.map(l => l.id)) + 1 : 1
     const linkCategory = category || 'Uncategorized'
-    // Create the category-based static URL (use lowercase for consistency)
     const convertedUrl = `/api/stream/${linkCategory.toLowerCase()}/${newId}`
 
-    // Create the new link
     const newLink: Link = {
       id: newId,
       name,
@@ -121,18 +143,23 @@ export async function POST(request: Request) {
       createdAt: new Date().toISOString()
     }
 
-    // Add the new link
-    data.links.push(newLink)
+    // Update links array
+    const updatedLinks = [...currentLinks, newLink];
 
-    // Update categories if needed
-    if (linkCategory !== 'Uncategorized' && !data.categories.includes(linkCategory)) {
-      data.categories.push(linkCategory)
+    // Update categories array if new category added
+    let updatedCategories = [...currentCategories];
+    if (linkCategory !== 'Uncategorized' && !currentCategories.includes(linkCategory)) {
+      updatedCategories.push(linkCategory);
     }
 
-    // Save to Firebase
-    await saveLinksData(data)
+    // Save links and categories separately
+    await saveLinks(updatedLinks);
+    // Only save categories if they actually changed
+    if (updatedCategories.length !== currentCategories.length) {
+        await saveCategories(updatedCategories);
+    }
 
-    return NextResponse.json(newLink)
+    return NextResponse.json(newLink);
   } catch (error) {
     console.error('Error in POST /api/links:', error)
     return NextResponse.json({ error: 'Failed to create link' }, { status: 500 })
@@ -140,31 +167,33 @@ export async function POST(request: Request) {
 }
 
 export async function DELETE(request: Request) {
+  // !!! THIS FUNCTION NEEDS UPDATING !!!
   try {
     const { ids } = await request.json()
 
     if (!Array.isArray(ids)) {
-      return NextResponse.json(
-        { error: 'IDs must be an array' },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: 'IDs must be an array' }, { status: 400 })
     }
 
-    const data = await getLinksData()
-    const originalLength = data.links.length
-    data.links = data.links.filter(link => !ids.includes(link.id))
+    // Fetch current links
+    const currentLinks = await getLinks();
+    const originalLength = currentLinks.length;
+    
+    // Filter links
+    const updatedLinks = currentLinks.filter(link => !ids.includes(link.id));
 
-    // Update categories list
-    const remainingCategories = new Set(data.links.map(link => link.category))
-    data.categories = Array.from(remainingCategories)
+    // Recalculate categories from remaining links
+    const remainingCategories = Array.from(new Set(updatedLinks.map(link => link.category).filter(c => c !== 'Uncategorized')));
 
-    // Save to Firebase
-    await saveLinksData(data)
+    // Save updated links and categories
+    await saveLinks(updatedLinks);
+    await saveCategories(remainingCategories);
 
     return NextResponse.json({
-      message: `Deleted ${originalLength - data.links.length} links`,
+      message: `Deleted ${originalLength - updatedLinks.length} links`,
     })
   } catch (error) {
+    console.error('Error deleting links:', error); // Added logging
     return NextResponse.json({ error: 'Failed to delete links' }, { status: 500 })
   }
 } 

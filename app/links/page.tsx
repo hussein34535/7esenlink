@@ -2,13 +2,31 @@
 
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Badge } from "@/components/ui/badge"
+// Removed Badge import as it wasn't used after the change
 import { toast } from "sonner"
-import { Loader2, Search, Copy, Trash2, Plus, X } from "lucide-react"
+import { Loader2, Search, Copy, Trash2, Plus, X } from "lucide-react" // Removed ExternalLink
 import Link from "next/link"
+import {
+  Table,
+  TableHeader,
+  TableBody,
+  TableHead,
+  TableRow,
+  TableCell
+} from "@/components/ui/table"
+import { Checkbox } from "@/components/ui/checkbox"
+import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+    DialogFooter,
+    DialogClose
+} from "@/components/ui/dialog"
+import { Textarea } from "@/components/ui/textarea"
 
 interface ConvertedLink {
   id: number
@@ -37,7 +55,7 @@ export default function LinksPage() {
   const [baseUrl, setBaseUrl] = useState("")
   const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false)
   const [m3uContent, setM3uContent] = useState('')
-  const [isLoading, setIsLoading] = useState(false)
+  const [isActionLoading, setIsActionLoading] = useState(false)
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -48,18 +66,23 @@ export default function LinksPage() {
 
   const loadLinksAndCategories = async () => {
     setLoading(true)
+    setError(null);
     try {
       const response = await fetch('/api/links')
       if (!response.ok) {
-        throw new Error('Failed to load links data')
+        const errorData = await response.json().catch(() => ({ error: 'Failed to load links data' }));
+        throw new Error(errorData.details || errorData.error || 'Failed to load links data')
       }
       const data: LinksData = await response.json()
       setLinks(data.links || [])
-      setCategories(Array.from(new Set(data.categories || [])))
-      setError(null)
+      // Ensure 'Uncategorized' is always an option if needed, or rely on backend data
+      const uniqueCategories = Array.from(new Set(['Uncategorized', ...(data.categories || [])]))
+      // Filter out empty or null category names potentially coming from DB
+      setCategories(uniqueCategories.filter(cat => cat && cat.trim() !== ''));
     } catch (err) {
-      setError('Failed to load links data')
-      console.error(err)
+      const message = err instanceof Error ? err.message : 'Failed to load links data';
+      setError(message);
+      console.error('Load error:', err)
     } finally {
       setLoading(false)
     }
@@ -70,7 +93,7 @@ export default function LinksPage() {
       toast.error('Category name cannot be empty')
       return
     }
-
+    setIsActionLoading(true);
     try {
       const response = await fetch('/api/links/categories', {
         method: 'POST',
@@ -85,39 +108,68 @@ export default function LinksPage() {
         throw new Error(errorData.details || errorData.error || 'Failed to create category')
       }
 
-      await loadLinksAndCategories()
-      
+      await loadLinksAndCategories() // Reload to get the updated list including the new one
+
       setNewCategory('');
       setShowNewCategoryInput(false);
-      toast.success('Category created successfully');
-      
+      toast.success(`Category '${newCategory.trim()}' created successfully`);
+
     } catch (err) {
       console.error('Error creating category:', err)
       toast.error(err instanceof Error ? err.message : 'Failed to create category')
+    } finally {
+        setIsActionLoading(false);
     }
   }
 
+  // Delete Category function remains largely the same, ensure it updates state correctly
   const deleteCategory = async (category: string) => {
+    if (!confirm(`Are you sure you want to delete the category "${category}"? Links in this category will be moved to "Uncategorized".`)) {
+        return;
+    }
+    setIsActionLoading(true);
     try {
       const response = await fetch(`/api/links/categories/${encodeURIComponent(category)}`, {
         method: 'DELETE',
       })
 
       if (!response.ok) {
-        throw new Error('Failed to delete category')
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.details || errorData.error || 'Failed to delete category')
       }
 
-      setCategories(categories.filter(c => c !== category))
-      setLinks(links.map(link => 
-        link.category === category ? { ...link, category: 'Uncategorized' } : link
-      ))
-      toast.success('Category deleted successfully')
+      // Optimistic UI update or reload
+      await loadLinksAndCategories(); // Reloading is safer to ensure consistency
+      // Manually update state if preferred (faster perceived response)
+      // setCategories(categories.filter(c => c !== category))
+      // setLinks(links.map(link =>
+      //   link.category === category ? { ...link, category: 'Uncategorized' } : link
+      // ))
+      // If using manual update, ensure the filter dropdown is also updated
+      if (selectedCategoryFilter === category) {
+          setSelectedCategoryFilter('all'); // Reset filter if the deleted category was selected
+      }
+
+      toast.success(`Category "${category}" deleted successfully`);
     } catch (err) {
-      toast.error('Failed to delete category')
+      console.error('Error deleting category:', err)
+      toast.error(err instanceof Error ? err.message : 'Failed to delete category')
+    } finally {
+      setIsActionLoading(false);
     }
   }
 
+
   const updateLinkCategory = async (linkId: number, newCategory: string) => {
+    setIsActionLoading(true);
+    const originalLinks = [...links];
+    // Optimistic update
+    setLinks(prevLinks =>
+        prevLinks.map(link =>
+            link.id === linkId ? { ...link, category: newCategory } : link
+        )
+    );
+
     try {
       const response = await fetch(`/api/links/${linkId}`, {
         method: 'PATCH',
@@ -128,28 +180,48 @@ export default function LinksPage() {
       })
 
       if (!response.ok) {
-        throw new Error('Failed to update link category')
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.details || errorData.error || 'Failed to update link category')
       }
-
-      setLinks(links.map(link =>
-        link.id === linkId ? { ...link, category: newCategory } : link
-      ))
       toast.success('Link category updated successfully')
+      // Optional: reload data if backend logic might affect other things
+      // await loadLinksAndCategories();
     } catch (err) {
-      toast.error('Failed to update link category')
+      console.error('Error updating category:', err);
+      toast.error(err instanceof Error ? err.message : 'Failed to update link category')
+      setLinks(originalLinks); // Revert on error
+    } finally {
+        setIsActionLoading(false);
     }
   }
 
   const copyToClipboard = async (text: string) => {
+    if (!text) {
+      toast.error("Cannot copy empty URL");
+      return;
+    }
     try {
-      await navigator.clipboard.writeText(text)
-      toast.success('Link copied to clipboard')
+      await navigator.clipboard.writeText(text);
+      toast.success("Link copied to clipboard");
     } catch (err) {
-      toast.error('Failed to copy link')
+      console.error("Failed to copy link:", err);
+      toast.error("Failed to copy link");
     }
   }
 
   const deleteLinks = async (ids: number[]) => {
+    if (ids.length === 0) return;
+    if (!confirm(`Are you sure you want to delete ${ids.length} selected link(s)?`)) {
+      return
+    }
+    setIsActionLoading(true);
+    const originalLinks = [...links];
+    const originalSelected = [...selectedLinks];
+
+    // Optimistic update
+    setLinks(prevLinks => prevLinks.filter(link => !ids.includes(link.id)))
+    setSelectedLinks(prevSelected => prevSelected.filter(id => !ids.includes(id)));
+
     try {
       const response = await fetch('/api/links', {
         method: 'DELETE',
@@ -160,40 +232,38 @@ export default function LinksPage() {
       })
 
       if (!response.ok) {
-        throw new Error('Failed to delete links')
+        const error = await response.json().catch(() => ({}));
+        throw new Error(error.message || 'Failed to delete links')
       }
 
-      setLinks(links.filter(link => !ids.includes(link.id)))
-      setSelectedLinks([])
-      toast.success('Links deleted successfully')
+      toast.success(`${ids.length} link(s) deleted successfully`)
+      // No need to update state again if optimistic update was successful
     } catch (err) {
-      toast.error('Failed to delete links')
+      console.error('Error deleting links:', err);
+      toast.error(err instanceof Error ? err.message : 'Failed to delete links')
+      // Revert on error
+      setLinks(originalLinks);
+      setSelectedLinks(originalSelected);
+    } finally {
+      setIsActionLoading(false);
     }
   }
 
-  const toggleSelectLink = (id: number) => {
+  const handleSelectLink = (id: number, checked: boolean | 'indeterminate') => {
     setSelectedLinks(prev =>
-      prev.includes(id)
-        ? prev.filter(linkId => linkId !== id)
-        : [...prev, id]
-    )
-  }
+      checked === true
+        ? [...prev, id]
+        : prev.filter(selectedId => selectedId !== id)
+    );
+  };
 
-  const handleSelectLink = (linkId: number) => {
-    setSelectedLinks(prev => 
-      prev.includes(linkId) 
-        ? prev.filter(id => id !== linkId)
-        : [...prev, linkId]
-    )
-  }
-
-  const handleSelectAll = () => {
-    if (selectedLinks.length === links.length) {
-      setSelectedLinks([])
+  const handleSelectAll = (checked: boolean | 'indeterminate') => {
+    if (checked === true) {
+      setSelectedLinks(filteredLinks.map(link => link.id));
     } else {
-      setSelectedLinks(links.map(link => link.id))
+      setSelectedLinks([]);
     }
-  }
+  };
 
   const handleUpdateSelected = async () => {
     if (selectedLinks.length === 0) {
@@ -201,7 +271,16 @@ export default function LinksPage() {
       return
     }
 
-    setIsLoading(true)
+    // Basic validation: Check if the number of lines (potential URLs) matches selected links
+    const lines = m3uContent.trim().split('\n');
+    const urlsInM3u = lines.filter(line => line.trim() && !line.trim().startsWith('#'));
+    if (urlsInM3u.length !== selectedLinks.length) {
+        toast.error(`Number of URLs in M3U content (${urlsInM3u.length}) does not match the number of selected links (${selectedLinks.length}).`);
+        return;
+    }
+
+
+    setIsActionLoading(true)
     try {
       const response = await fetch('/api/links/update-selected', {
         method: 'POST',
@@ -210,12 +289,12 @@ export default function LinksPage() {
         },
         body: JSON.stringify({
           linkIds: selectedLinks,
-          m3uContent
+          m3uContent // Send the raw M3U content
         }),
       })
 
       if (!response.ok) {
-        const error = await response.json()
+        const error = await response.json().catch(() => ({ error: 'Failed to update links' }))
         throw new Error(error.error || 'Failed to update links')
       }
 
@@ -223,286 +302,350 @@ export default function LinksPage() {
       setM3uContent('')
       setSelectedLinks([])
       setIsUpdateModalOpen(false)
-      loadLinksAndCategories()
+      await loadLinksAndCategories() // Refresh data to show updated URLs
     } catch (error) {
       console.error('Error updating links:', error)
       toast.error(error instanceof Error ? error.message : 'Failed to update links')
     } finally {
-      setIsLoading(false)
-    }
-  }
-
-  const handleDeleteSelected = async () => {
-    if (selectedLinks.length === 0) {
-      toast.error('Please select at least one link to delete')
-      return
-    }
-
-    if (!confirm(`Are you sure you want to delete ${selectedLinks.length} selected links?`)) {
-      return
-    }
-
-    setIsLoading(true)
-    try {
-      const response = await fetch('/api/links', {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ ids: selectedLinks }),
-      })
-
-      if (!response.ok) {
-        const error = await response.json()
-        throw new Error(error.message || 'Failed to delete links')
-      }
-
-      toast.success('Links deleted successfully')
-      setSelectedLinks([])
-      loadLinksAndCategories()
-    } catch (error) {
-      console.error('Error deleting links:', error)
-      toast.error(error instanceof Error ? error.message : 'Failed to delete links')
-    } finally {
-      setIsLoading(false)
+      setIsActionLoading(false)
     }
   }
 
   const filteredLinks = links.filter(link => {
-    const matchesSearch = 
-        link.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        link.original.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (baseUrl + link.converted).toLowerCase().includes(searchQuery.toLowerCase())
-    const matchesCategory = selectedCategoryFilter === 'all' || link.category === selectedCategoryFilter
-    return matchesSearch && matchesCategory
-  })
+    const searchLower = searchQuery.toLowerCase();
+    const fullConvertedUrl = baseUrl ? `${baseUrl}${link.converted}` : link.converted;
+    const matchesSearch =
+        (link.name && link.name.toLowerCase().includes(searchLower)) ||
+        (link.original && link.original.toLowerCase().includes(searchLower)) ||
+        (fullConvertedUrl && fullConvertedUrl.toLowerCase().includes(searchLower)) ||
+        (link.category && link.category.toLowerCase().includes(searchLower));
+    const matchesCategory = selectedCategoryFilter === 'all' || link.category === selectedCategoryFilter;
+    return matchesSearch && matchesCategory;
+  });
+
+  const isAllSelected = filteredLinks.length > 0 && selectedLinks.length === filteredLinks.length;
+  const isSomeSelected = selectedLinks.length > 0 && selectedLinks.length < filteredLinks.length;
+  const selectAllCheckedState = isAllSelected ? true : (isSomeSelected ? 'indeterminate' : false);
+
+  // Define placeholder text outside JSX
+  const m3uPlaceholder = `#EXTM3U
+#EXTINF:-1 tvg-id="SomeChannel" tvg-name="Some Channel Name" group-title="News",Some Channel Name
+http://example.com/stream1
+#EXTINF:-1 tvg-id="AnotherID" tvg-name="Another Channel" group-title="Movies",Another Channel
+http://example.com/stream2
+#EXTINF:-1 tvg-id="ThirdID" tvg-name="Third Channel" group-title="Sports",Third Channel
+http://example.com/stream3
+...`;
 
   return (
-    <div className="container mx-auto py-8">
-      <div className="flex flex-wrap justify-between items-center gap-4 mb-8">
-        <h1 className="text-3xl font-bold">Converted Links</h1>
-        <div className="flex flex-wrap gap-4">
-          <div className="relative">
-            <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search name, URL, category..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-8 w-64"
-            />
-          </div>
-          <Select value={selectedCategoryFilter} onValueChange={setSelectedCategoryFilter}>
-            <SelectTrigger className="w-[180px]">
-              <SelectValue placeholder="Filter by category" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Categories</SelectItem>
-              {categories.map(category => (
-                <SelectItem key={category} value={category}>{category}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          {showNewCategoryInput ? (
-            <div className="flex gap-2">
-              <Input
-                placeholder="New category name"
-                value={newCategory}
-                onChange={(e) => setNewCategory(e.target.value)}
-                className="w-40"
-              />
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={createCategory}
-                disabled={!newCategory.trim()}
-              >
-                <Plus className="h-4 w-4" />
-              </Button>
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={() => {
-                  setShowNewCategoryInput(false)
-                  setNewCategory('')
-                }}
-              >
-                <X className="h-4 w-4" />
-              </Button>
-            </div>
-          ) : (
-            <Button
-              variant="outline"
-              onClick={() => setShowNewCategoryInput(true)}
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              Add Category
-            </Button>
-          )}
-          <Link href="/">
-            <Button variant="outline">Back to Add Links</Button>
-          </Link>
-        </div>
+    <div className="container mx-auto py-8 px-4 md:px-6 space-y-8">
+      <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
+        <h1 className="text-3xl font-bold tracking-tight">Converted Links</h1>
+        <Link href="/">
+          <Button variant="outline">Back to Add Links</Button>
+        </Link>
       </div>
 
+      {/* Search and Filter Section */}
+      <div className="flex flex-col md:flex-row items-center gap-4">
+        <div className="relative flex-grow w-full md:w-auto">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Search name, URL, category..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-10 w-full md:w-[300px] lg:w-[400px]"
+            aria-label="Search links"
+          />
+        </div>
+
+        <Select value={selectedCategoryFilter} onValueChange={setSelectedCategoryFilter}>
+          <SelectTrigger className="w-full md:w-[200px]" aria-label="Filter by category">
+            <SelectValue placeholder="Filter by category" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Categories</SelectItem>
+            {categories.map(category => (
+              <SelectItem key={category} value={category}>{category}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        {showNewCategoryInput ? (
+          <div className="flex gap-2 w-full md:w-auto">
+            <Input
+              placeholder="New category name"
+              value={newCategory}
+              onChange={(e) => setNewCategory(e.target.value)}
+              className="flex-grow"
+              disabled={isActionLoading}
+              aria-label="New category name"
+            />
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={createCategory}
+              disabled={!newCategory.trim() || isActionLoading}
+              title="Save Category"
+            >
+              {isActionLoading ? <Loader2 className="h-4 w-4 animate-spin"/> : <Plus className="h-4 w-4" />}
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => { setShowNewCategoryInput(false); setNewCategory(''); }}
+              title="Cancel adding category"
+              disabled={isActionLoading}
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+        ) : (
+          <Button
+            variant="outline"
+            onClick={() => setShowNewCategoryInput(true)}
+            className="w-full md:w-auto"
+            disabled={isActionLoading} // Disable if any action is loading
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            Add Category
+          </Button>
+        )}
+      </div>
+
+      {/* Error Display */}
       {error && (
-        <Card className="mb-4 border-destructive">
+        <Card className="border-destructive bg-destructive/10">
           <CardContent className="pt-6">
-            <p className="text-destructive">{error}</p>
+            <p className="text-destructive font-medium">Error: {error}</p>
           </CardContent>
         </Card>
       )}
 
+      {/* Loading State */}
       {loading ? (
         <div className="flex justify-center items-center h-64">
-          <Loader2 className="h-8 w-8 animate-spin" />
+          <Loader2 className="h-12 w-12 animate-spin text-muted-foreground" />
         </div>
       ) : (
         <>
+          {/* Selected Actions Bar */}
           {selectedLinks.length > 0 && (
-            <div className="mb-4 flex items-center justify-between p-4 bg-muted rounded-lg">
-              <span className="text-sm text-muted-foreground">
-                {selectedLinks.length} link{selectedLinks.length === 1 ? '' : 's'} selected
-              </span>
-              <div className="flex space-x-4">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setIsUpdateModalOpen(true)}
-                  disabled={selectedLinks.length === 0 || isLoading}
-                >
-                  Update Selected URLs
-                </Button>
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  onClick={handleDeleteSelected}
-                  disabled={selectedLinks.length === 0 || isLoading}
-                >
-                  Delete Selected
-                </Button>
-              </div>
-            </div>
-          )}
-
-          {filteredLinks.length === 0 ? (
-            <Card>
-              <CardContent className="pt-6 text-center">
-                <p>No links found matching your criteria.</p>
+            <Card className="mb-6 border-primary/50 bg-primary/5">
+              <CardContent className="p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+                <div className="flex items-center gap-2">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleSelectAll(false)} // Deselect all
+                      title="Clear selection"
+                      className="h-6 w-6"
+                      aria-label="Clear selection"
+                    >
+                        <X className="h-4 w-4" />
+                    </Button>
+                    <span className="text-sm font-medium text-primary">
+                        {selectedLinks.length} link{selectedLinks.length === 1 ? '' : 's'} selected
+                    </span>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setIsUpdateModalOpen(true)}
+                      disabled={isActionLoading}
+                    >
+                    {/* Icon can be added here if desired, e.g., <Upload className="h-4 w-4 mr-2" /> */}
+                    Update Selected URLs
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={() => deleteLinks(selectedLinks)}
+                      disabled={isActionLoading}
+                    >
+                    {isActionLoading ? <Loader2 className="h-4 w-4 mr-2 animate-spin"/> : <Trash2 className="h-4 w-4 mr-2" />}
+                    Delete Selected
+                    </Button>
+                </div>
               </CardContent>
             </Card>
-          ) : (
-            <div className="grid grid-cols-1 gap-4">
-              {filteredLinks.map((link) => {
-                const fullConvertedUrl = baseUrl + link.converted
-                return (
-                <Card key={link.id}>
-                  <CardContent className="p-6">
-                    <div className="flex items-start justify-between mb-3">
-                      <div className="flex items-center gap-3 flex-1 min-w-0">
-                         <Input
-                            type="checkbox"
-                            checked={selectedLinks.includes(link.id)}
-                            onChange={() => handleSelectLink(link.id)}
-                            className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer"
-                          />
-                         <p className="text-base font-semibold text-foreground truncate" title={link.name}>{link.name}</p>
-                      </div>
-                       <div className="flex-shrink-0 flex space-x-1">
-                        <Button variant="ghost" size="icon" onClick={() => copyToClipboard(fullConvertedUrl)} title="Copy static link">
-                            <Copy className="h-4 w-4" />
-                        </Button>
-                         <Button variant="ghost" size="icon" onClick={() => deleteLinks([link.id])} title="Delete link">
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                         </Button>
-                      </div>
-                    </div>
-                    
-                    <div className="space-y-2 mb-4">
-                      <div>
-                        <p className="text-xs font-medium text-muted-foreground">Original URL</p>
-                        <p className="mt-1 text-xs text-muted-foreground break-all">{link.original}</p>
-                      </div>
-                       <div>
-                        <p className="text-xs font-medium text-muted-foreground">Static Link</p>
-                        <p className="mt-1 text-sm text-primary break-all">{fullConvertedUrl}</p>
-                      </div>
-                    </div>
-                    
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <Select value={link.category} onValueChange={(newCat) => updateLinkCategory(link.id, newCat)}>
-                           <SelectTrigger className="h-7 text-xs w-[150px]">
-                             <SelectValue placeholder="Category" />
-                           </SelectTrigger>
-                           <SelectContent>
-                             {categories.map(category => (
-                                <SelectItem key={category} value={category}>{category}</SelectItem>
-                              ))}
-                           </SelectContent>
-                         </Select>
-                        <span className="text-xs text-muted-foreground">
-                          Added: {new Date(link.createdAt).toLocaleDateString()}
-                        </span>
-                      </div>
-                      <a
-                        href={fullConvertedUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-xs text-primary hover:underline"
-                      >
-                        Test Link
-                      </a>
-                    </div>
-                  </CardContent>
-                </Card>
-              )})}
-            </div>
           )}
+
+          {/* Links Table */}
+          <Card>
+             <CardContent className="p-0">
+               <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-[50px] px-4">
+                       <Checkbox
+                          checked={selectAllCheckedState}
+                          onCheckedChange={handleSelectAll}
+                          aria-label="Select all rows"
+                        />
+                    </TableHead>
+                    <TableHead>Name / Category</TableHead>
+                    <TableHead>Links</TableHead>
+                    <TableHead className="text-right w-[100px] pr-4">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredLinks.length > 0 ? (
+                    filteredLinks.map((link) => {
+                      const fullConvertedUrl = baseUrl ? `${baseUrl}${link.converted}` : link.converted;
+                      const isSelected = selectedLinks.includes(link.id);
+                      const createdDate = new Date(link.createdAt).toLocaleDateString('en-US', {
+                        year: 'numeric', month: 'short', day: 'numeric',
+                        hour: '2-digit', minute: '2-digit'
+                      });
+                      return (
+                        <TableRow
+                          key={link.id}
+                          data-state={isSelected ? "selected" : ""}
+                          className="hover:bg-muted/50 align-top" // Use align-top for better layout with multi-line content
+                        >
+                          <TableCell className="py-3 px-4">
+                              <Checkbox
+                                checked={isSelected}
+                                onCheckedChange={(checked) => handleSelectLink(link.id, checked)}
+                                aria-label={`Select row for ${link.name}`}
+                                className="mt-1"
+                              />
+                          </TableCell>
+                          <TableCell className="py-3 px-4 font-medium">
+                             <div className="flex flex-col gap-2">
+                               <span className="text-sm truncate" title={`${link.name}`}>
+                                {link.name || "Unnamed Link"}
+                               </span>
+                               <Select 
+                                 value={link.category || 'Uncategorized'} 
+                                 onValueChange={(newCategory) => updateLinkCategory(link.id, newCategory)}
+                                 disabled={isActionLoading}
+                               >
+                                 <SelectTrigger className="w-full h-8 text-xs mt-1">
+                                   <SelectValue placeholder="Select category" />
+                                 </SelectTrigger>
+                                 <SelectContent>
+                                   {categories.map((category) => (
+                                     <SelectItem key={category} value={category} className="text-xs">
+                                       {category}
+                                     </SelectItem>
+                                   ))}
+                                 </SelectContent>
+                               </Select>
+                             </div>
+                          </TableCell>
+                          <TableCell className="py-3 px-4">
+                            <div className="flex flex-col gap-2">
+                              <div className="flex items-center gap-1">
+                                <span className="text-sm truncate flex-grow" title={link.original}>
+                                  <span className="text-muted-foreground mr-1">Orig:</span>
+                                  {link.original}
+                                </span>
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => copyToClipboard(link.original)}
+                                    title="Copy original link"
+                                    className="h-6 w-6 flex-shrink-0"
+                                    disabled={!link.original}
+                                >
+                                    <Copy className="h-3 w-3" />
+                                </Button>
+                              </div>
+                              
+                              <div className="flex items-center gap-1">
+                                 <span className="text-sm truncate flex-grow" title={fullConvertedUrl}>
+                                   <span className="text-muted-foreground mr-1">Static:</span>
+                                   {fullConvertedUrl}
+                                </span>
+                                 <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => copyToClipboard(fullConvertedUrl)}
+                                    title="Copy static link"
+                                    className="h-6 w-6 flex-shrink-0"
+                                    disabled={!fullConvertedUrl}
+                                 >
+                                    <Copy className="h-3 w-3" />
+                                </Button>
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell className="py-3 px-4 text-right">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => deleteLinks([link.id])}
+                              title="Delete link"
+                              className="w-fit h-auto p-1 text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
+                              disabled={isActionLoading}
+                            >
+                               {/* Show loader specific to this row if deleting just this one */}
+                               {isActionLoading && selectedLinks.length === 1 && selectedLinks[0] === link.id ?
+                                <Loader2 className="h-3 w-3 mr-1 animate-spin"/> :
+                                <Trash2 className="h-3 w-3 mr-1" />}
+                              Delete
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      )
+                    })
+                  ) : (
+                    <TableRow>
+                        <TableCell colSpan={6} className="h-32 text-center text-muted-foreground">
+                            {searchQuery || selectedCategoryFilter !== 'all'
+                                ? "No links found matching your criteria."
+                                : "No links have been added yet."
+                            }
+                        </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
         </>
       )}
 
-      {/* Update Modal */}
-      {isUpdateModalOpen && (
-        <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center">
-          <div className="bg-white rounded-lg p-6 max-w-2xl w-full">
-            <h2 className="text-lg font-medium text-gray-900 mb-4">
-              Update Selected Links
-            </h2>
-            <p className="text-sm text-gray-500 mb-4">
-              Paste the M3U content below. The URLs will be used to update the selected links in order.
-              Make sure the number of URLs in the M3U content matches the number of selected links.
-            </p>
-            <div className="mb-4">
-              <label htmlFor="m3uContent" className="block text-sm font-medium text-gray-700">
-                M3U Content
-              </label>
-              <textarea
-                id="m3uContent"
-                value={m3uContent}
-                onChange={(e) => setM3uContent(e.target.value)}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                rows={10}
-                placeholder="Paste M3U content here..."
-              />
+      {/* Update Selected Links Modal */}
+      <Dialog open={isUpdateModalOpen} onOpenChange={setIsUpdateModalOpen}>
+        <DialogContent className="sm:max-w-[625px]">
+            <DialogHeader>
+                <DialogTitle>Update {selectedLinks.length} Selected Link(s)</DialogTitle>
+            </DialogHeader>
+            <div className="py-4 space-y-4">
+                <p className="text-sm text-muted-foreground">
+                  Paste M3U content below. The system will extract URLs (lines not starting with '#')
+                  and update the 'Original URL' for the selected links in their current displayed order.
+                  Ensure the number of valid URL lines matches the {selectedLinks.length} selected link(s).
+                  The name and other M3U tags will be ignored.
+                </p>
+                 <Textarea
+                    id="m3uContent"
+                    value={m3uContent}
+                    onChange={(e) => setM3uContent(e.target.value)}
+                    className="min-h-[200px] text-xs font-mono"
+                    placeholder={m3uPlaceholder}
+                    aria-label="M3U content for updating links"
+                />
             </div>
-            <div className="flex justify-end space-x-4">
-              <button
-                onClick={() => setIsUpdateModalOpen(false)}
-                className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleUpdateSelected}
-                disabled={isLoading || !m3uContent}
-                className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
-              >
-                {isLoading ? 'Updating...' : 'Update Links'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+            <DialogFooter>
+                <DialogClose asChild>
+                    <Button variant="outline" disabled={isActionLoading}>Cancel</Button>
+                </DialogClose>
+                <Button
+                    onClick={handleUpdateSelected}
+                    disabled={isActionLoading || !m3uContent.trim()}
+                >
+                    {isActionLoading ? <Loader2 className="h-4 w-4 mr-2 animate-spin"/> : null}
+                    Update Links
+                </Button>
+            </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
     </div>
   )
-} 
+}

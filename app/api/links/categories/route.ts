@@ -46,11 +46,40 @@ async function saveLinksData(data: LinksData) {
   }
 }
 
+async function getCategories(): Promise<string[]> {
+  const categoriesRef = ref(database, 'categories');
+  const snapshot = await get(categoriesRef);
+  if (!snapshot.exists()) {
+    return [];
+  }
+  const rawCategories: any[] = Array.isArray(snapshot.val()) ? snapshot.val() : [];
+  return Array.from(
+    new Set(
+      rawCategories
+        .map(cat => typeof cat === 'string' ? cat.trim() : '')
+        .filter(cat => cat !== '')
+    )
+  );
+}
+
+async function saveCategories(categories: string[]) {
+  try {
+    const categoriesRef = ref(database, 'categories');
+    const validCategories = Array.from(new Set(categories.filter(c => typeof c === 'string' && c.trim() !== '')));
+    console.log('[Categories Route] Saving categories to Firebase path /categories:', validCategories);
+    await set(categoriesRef, validCategories);
+    console.log('[Categories Route] Categories saved successfully');
+  } catch (error) {
+    console.error('[Categories Route] Error writing categories to Firebase:', error);
+    throw new Error('Failed to save categories data to Firebase');
+  }
+}
+
 export async function GET() {
   try {
     console.log('GET /api/links/categories called')
-    const data = await getLinksData()
-    return NextResponse.json(data.categories)
+    const categories = await getCategories()
+    return NextResponse.json(categories)
   } catch (error) {
     console.error('Error in GET /api/links/categories:', error)
     return NextResponse.json({ 
@@ -64,8 +93,7 @@ export async function POST(request: Request) {
   try {
     console.log('POST /api/links/categories called')
     
-    // Parse the request body
-    let body
+    let body;
     try {
       body = await request.json()
       console.log('Request body:', body)
@@ -77,31 +105,36 @@ export async function POST(request: Request) {
       }, { status: 400 })
     }
 
-    // Get the category name from the body
-    const category = body.name || body.category
-    console.log('Category to add:', category)
+    const categoryToAdd = body.name || body.category
+    console.log('Category to add:', categoryToAdd)
     
-    if (!category) {
-      console.log('Category is missing')
+    if (!categoryToAdd || typeof categoryToAdd !== 'string' || categoryToAdd.trim() === '') {
+      console.log('Category is missing or invalid')
       return NextResponse.json({ 
-        error: 'Category name is required',
+        error: 'Valid category name is required',
         receivedBody: body 
       }, { status: 400 })
     }
 
-    const data = await getLinksData()
-    console.log('Current data:', data)
+    const trimmedCategory = categoryToAdd.trim();
+
+    // Fetch only categories
+    const currentCategories = await getCategories()
+    console.log('Current categories:', currentCategories)
     
-    if (!data.categories.includes(category)) {
-      console.log('Adding new category:', category)
-      data.categories.push(category)
-      await saveLinksData(data)
+    let updatedCategories = [...currentCategories];
+    if (!currentCategories.includes(trimmedCategory)) {
+      console.log('Adding new category:', trimmedCategory)
+      updatedCategories.push(trimmedCategory);
+      // Save only categories
+      await saveCategories(updatedCategories) 
       console.log('Category added successfully')
     } else {
-      console.log('Category already exists:', category)
+      console.log('Category already exists:', trimmedCategory)
     }
 
-    return NextResponse.json({ success: true, category })
+    // Return success and the added/existing category
+    return NextResponse.json({ success: true, category: trimmedCategory })
   } catch (error) {
     console.error('Error in POST /api/links/categories:', error)
     return NextResponse.json({ 
