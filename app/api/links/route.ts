@@ -1,10 +1,6 @@
 import { NextResponse } from 'next/server'
-
-// In-memory storage
-let linksData: LinksData = {
-  links: [],
-  categories: []
-}
+import { database } from '@/lib/firebase'
+import { ref, get, set, push, remove } from 'firebase/database'
 
 interface Link {
   id: number
@@ -20,9 +16,21 @@ interface LinksData {
   categories: string[]
 }
 
+async function getLinksData(): Promise<LinksData> {
+  const linksRef = ref(database, 'links')
+  const snapshot = await get(linksRef)
+  return snapshot.val() || { links: [], categories: [] }
+}
+
+async function saveLinksData(data: LinksData) {
+  const linksRef = ref(database, 'links')
+  await set(linksRef, data)
+}
+
 export async function GET() {
   try {
-    return NextResponse.json(linksData)
+    const data = await getLinksData()
+    return NextResponse.json(data)
   } catch (error) {
     console.error('Error in GET /api/links:', error)
     return NextResponse.json({ error: 'Failed to read links' }, { status: 500 })
@@ -37,8 +45,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Original URL and name are required' }, { status: 400 })
     }
 
+    const data = await getLinksData()
+    
     // Generate a new ID
-    const newId = linksData.links.length > 0 ? Math.max(...linksData.links.map(l => l.id)) + 1 : 1
+    const newId = data.links.length > 0 ? Math.max(...data.links.map(l => l.id)) + 1 : 1
     
     // Determine the category, defaulting to 'Uncategorized'
     const linkCategory = category || 'Uncategorized'
@@ -56,12 +66,15 @@ export async function POST(request: Request) {
     }
 
     // Add the new link
-    linksData.links.push(newLink)
+    data.links.push(newLink)
 
     // Update categories if needed
-    if (linkCategory !== 'Uncategorized' && !linksData.categories.includes(linkCategory)) {
-      linksData.categories.push(linkCategory)
+    if (linkCategory !== 'Uncategorized' && !data.categories.includes(linkCategory)) {
+      data.categories.push(linkCategory)
     }
+
+    // Save to Firebase
+    await saveLinksData(data)
 
     return NextResponse.json(newLink)
   } catch (error) {
@@ -81,15 +94,19 @@ export async function DELETE(request: Request) {
       )
     }
 
-    const originalLength = linksData.links.length
-    linksData.links = linksData.links.filter(link => !ids.includes(link.id))
+    const data = await getLinksData()
+    const originalLength = data.links.length
+    data.links = data.links.filter(link => !ids.includes(link.id))
 
     // Update categories list
-    const remainingCategories = new Set(linksData.links.map(link => link.category))
-    linksData.categories = Array.from(remainingCategories)
+    const remainingCategories = new Set(data.links.map(link => link.category))
+    data.categories = Array.from(remainingCategories)
+
+    // Save to Firebase
+    await saveLinksData(data)
 
     return NextResponse.json({
-      message: `Deleted ${originalLength - linksData.links.length} links`,
+      message: `Deleted ${originalLength - data.links.length} links`,
     })
   } catch (error) {
     return NextResponse.json({ error: 'Failed to delete links' }, { status: 500 })
