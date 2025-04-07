@@ -1,110 +1,112 @@
-import { NextResponse } from "next/server"
-import fs from "fs"
-import path from "path"
-
-const dataDir = path.join(process.cwd(), "data")
-const linksFile = path.join(dataDir, "links.json")
-
-// Ensure data directory exists
-if (!fs.existsSync(dataDir)) {
-  fs.mkdirSync(dataDir, { recursive: true })
-}
-
-// Initialize links file if it doesn't exist
-if (!fs.existsSync(linksFile)) {
-  fs.writeFileSync(linksFile, JSON.stringify({ links: [], categories: [] }))
-}
-
-interface Link {
-  id: number
-  original: string
-  converted: string
-  category: string
-  createdAt: string
-}
+import { NextResponse } from 'next/server'
+import { database } from '@/lib/firebase'
+import { ref, get, set } from 'firebase/database'
 
 interface LinksData {
-  links: Link[]
+  links: any[]
   categories: string[]
 }
 
-function readLinks(): LinksData {
+async function getLinksData(): Promise<LinksData> {
   try {
-    const data = fs.readFileSync(linksFile, "utf-8")
-    const parsedData = JSON.parse(data)
-    // Ensure the data structure is correct
-    return {
-      links: Array.isArray(parsedData.links) ? parsedData.links : [],
-      categories: Array.isArray(parsedData.categories) ? parsedData.categories : []
+    const linksRef = ref(database, 'links')
+    console.log('Reading from Firebase at path:', linksRef.toString())
+    const snapshot = await get(linksRef)
+    if (!snapshot.exists()) {
+      console.log('No data exists at path, returning empty data')
+      return { links: [], categories: [] }
     }
-  } catch (error) {
-    console.error("Error reading links file:", error)
-    return { links: [], categories: [] }
-  }
-}
-
-function writeLinks(data: LinksData) {
-  try {
-    fs.writeFileSync(linksFile, JSON.stringify(data, null, 2))
-  } catch (error) {
-    console.error("Error writing links file:", error)
-    throw error
-  }
-}
-
-export async function POST(request: Request) {
-  try {
-    const { name } = await request.json()
-
-    if (!name || typeof name !== "string") {
-      return NextResponse.json(
-        { error: "Category name is required" },
-        { status: 400 }
-      )
-    }
-
-    const data = readLinks()
+    const data = snapshot.val()
+    console.log('Retrieved data:', data)
     
-    // Ensure categories array exists
-    if (!Array.isArray(data.categories)) {
+    // Ensure the data has the correct structure
+    if (!data.categories) {
       data.categories = []
     }
-    
-    // Check if category already exists
-    if (data.categories.includes(name)) {
-      return NextResponse.json(
-        { error: "Category already exists" },
-        { status: 400 }
-      )
+    if (!data.links) {
+      data.links = []
     }
-
-    // Add new category
-    data.categories.push(name)
-    writeLinks(data)
-
-    return NextResponse.json({ name })
+    
+    return data
   } catch (error) {
-    console.error("Error creating category:", error)
-    return NextResponse.json(
-      { error: "Failed to create category" },
-      { status: 500 }
-    )
+    console.error('Error reading from Firebase:', error)
+    throw error // Re-throw to handle in the route handler
+  }
+}
+
+async function saveLinksData(data: LinksData) {
+  try {
+    const linksRef = ref(database, 'links')
+    console.log('Saving data to Firebase:', data)
+    await set(linksRef, data)
+    console.log('Data saved successfully')
+  } catch (error) {
+    console.error('Error writing to Firebase:', error)
+    throw error // Re-throw to handle in the route handler
   }
 }
 
 export async function GET() {
   try {
-    const data = readLinks()
-    // Ensure categories array exists
-    if (!Array.isArray(data.categories)) {
-      data.categories = []
-    }
+    console.log('GET /api/links/categories called')
+    const data = await getLinksData()
     return NextResponse.json(data.categories)
   } catch (error) {
-    console.error("Error reading categories:", error)
-    return NextResponse.json(
-      { error: "Failed to read categories" },
-      { status: 500 }
-    )
+    console.error('Error in GET /api/links/categories:', error)
+    return NextResponse.json({ 
+      error: 'Failed to read categories',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    }, { status: 500 })
+  }
+}
+
+export async function POST(request: Request) {
+  try {
+    console.log('POST /api/links/categories called')
+    
+    // Parse the request body
+    let body
+    try {
+      body = await request.json()
+      console.log('Request body:', body)
+    } catch (error) {
+      console.error('Error parsing request body:', error)
+      return NextResponse.json({ 
+        error: 'Invalid request body',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      }, { status: 400 })
+    }
+
+    // Get the category name from the body
+    const category = body.name || body.category
+    console.log('Category to add:', category)
+    
+    if (!category) {
+      console.log('Category is missing')
+      return NextResponse.json({ 
+        error: 'Category name is required',
+        receivedBody: body 
+      }, { status: 400 })
+    }
+
+    const data = await getLinksData()
+    console.log('Current data:', data)
+    
+    if (!data.categories.includes(category)) {
+      console.log('Adding new category:', category)
+      data.categories.push(category)
+      await saveLinksData(data)
+      console.log('Category added successfully')
+    } else {
+      console.log('Category already exists:', category)
+    }
+
+    return NextResponse.json({ success: true, category })
+  } catch (error) {
+    console.error('Error in POST /api/links/categories:', error)
+    return NextResponse.json({ 
+      error: 'Failed to create category',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    }, { status: 500 })
   }
 } 

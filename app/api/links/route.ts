@@ -17,14 +17,54 @@ interface LinksData {
 }
 
 async function getLinksData(): Promise<LinksData> {
+  console.log('Attempting to read from Firebase path: /links');
   try {
-    const linksRef = ref(database, 'links')
-    const snapshot = await get(linksRef)
-    const data = snapshot.val()
-    return data || { links: [], categories: [] }
+    const linksRef = ref(database, 'links');
+    const snapshot = await get(linksRef);
+
+    if (!snapshot.exists()) {
+      console.log('Firebase path /links does not exist. Returning empty data.');
+      return { links: [], categories: [] };
+    }
+
+    const data = snapshot.val();
+    console.log('Raw data retrieved from Firebase:', JSON.stringify(data, null, 2));
+
+    // Validate and normalize the data structure
+    const rawLinks: any[] = Array.isArray(data?.links) ? data.links : [];
+    const rawCategories: any[] = Array.isArray(data?.categories) ? data.categories : [];
+
+    // Filter categories to ensure they are unique, non-empty strings
+    const categories: string[] = Array.from(
+      new Set(
+        rawCategories
+          .map(cat => typeof cat === 'string' ? cat.trim() : '') // Convert to trimmed string or empty
+          .filter(cat => cat !== '') // Filter out empty strings
+      )
+    );
+
+    // Validate each link object
+    const validatedLinks = rawLinks.filter((link: any): link is Link => 
+        link && 
+        typeof link.id === 'number' && 
+        typeof link.name === 'string' && 
+        typeof link.original === 'string' &&
+        typeof link.converted === 'string' &&
+        typeof link.category === 'string' &&
+        typeof link.createdAt === 'string'
+    );
+
+    if (validatedLinks.length !== rawLinks.length) {
+        console.warn('Some link objects were invalid and filtered out.');
+    }
+
+    const structuredData: LinksData = { links: validatedLinks, categories };
+    console.log('Returning structured data:', JSON.stringify(structuredData, null, 2));
+    return structuredData;
+
   } catch (error) {
-    console.error('Error reading from Firebase:', error)
-    return { links: [], categories: [] }
+    console.error('Error reading from Firebase in getLinksData:', error);
+    throw error; 
   }
 }
 
@@ -40,11 +80,16 @@ async function saveLinksData(data: LinksData) {
 
 export async function GET() {
   try {
-    const data = await getLinksData()
-    return NextResponse.json(data)
+    console.log('GET /api/links request received');
+    const data = await getLinksData();
+    return NextResponse.json(data);
   } catch (error) {
-    console.error('Error in GET /api/links:', error)
-    return NextResponse.json({ error: 'Failed to read links' }, { status: 500 })
+    console.error('Error in GET /api/links:', error);
+    // Provide more details in the error response
+    return NextResponse.json({
+      error: 'Failed to read links data',
+      details: error instanceof Error ? error.message : 'Unknown error occurred'
+    }, { status: 500 });
   }
 }
 

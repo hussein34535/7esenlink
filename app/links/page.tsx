@@ -81,16 +81,19 @@ export default function LinksPage() {
       })
 
       if (!response.ok) {
-        throw new Error('Failed to create category')
+        const errorData = await response.json()
+        throw new Error(errorData.details || errorData.error || 'Failed to create category')
       }
 
-      const data = await response.json()
-      setCategories([...categories, data.name])
-      setNewCategory('')
-      setShowNewCategoryInput(false)
-      toast.success('Category created successfully')
+      await loadLinksAndCategories()
+      
+      setNewCategory('');
+      setShowNewCategoryInput(false);
+      toast.success('Category created successfully');
+      
     } catch (err) {
-      toast.error('Failed to create category')
+      console.error('Error creating category:', err)
+      toast.error(err instanceof Error ? err.message : 'Failed to create category')
     }
   }
 

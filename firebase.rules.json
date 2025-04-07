@@ -1,0 +1,14 @@
+{
+  "rules": {
+    "links": {
+      ".read": true,
+      ".write": true,
+      "links": {
+        ".validate": "newData.hasChildren(['id', 'name', 'original', 'converted', 'category', 'createdAt'])"
+      },
+      "categories": {
+        ".validate": "newData.isArray()"
+      }
+    }
+  }
+} 
