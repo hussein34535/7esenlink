@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { database } from '@/lib/firebase'
-import { ref, get, set, push, remove } from 'firebase/database'
+import { ref, get, set } from 'firebase/database'
 
 interface Link {
   id: number
@@ -17,14 +17,25 @@ interface LinksData {
 }
 
 async function getLinksData(): Promise<LinksData> {
-  const linksRef = ref(database, 'links')
-  const snapshot = await get(linksRef)
-  return snapshot.val() || { links: [], categories: [] }
+  try {
+    const linksRef = ref(database, 'links')
+    const snapshot = await get(linksRef)
+    const data = snapshot.val()
+    return data || { links: [], categories: [] }
+  } catch (error) {
+    console.error('Error reading from Firebase:', error)
+    return { links: [], categories: [] }
+  }
 }
 
 async function saveLinksData(data: LinksData) {
-  const linksRef = ref(database, 'links')
-  await set(linksRef, data)
+  try {
+    const linksRef = ref(database, 'links')
+    await set(linksRef, data)
+  } catch (error) {
+    console.error('Error writing to Firebase:', error)
+    throw new Error('Failed to save data to Firebase')
+  }
 }
 
 export async function GET() {
