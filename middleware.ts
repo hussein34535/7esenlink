@@ -11,18 +11,23 @@ export function middleware(req: NextRequest) {
     return NextResponse.next()
   }
 
-  // Temporarily disable development bypass for testing
-  // if (process.env.NODE_ENV === 'development') {
-  //   console.log("Development mode: Bypassing Basic Auth");
-  //   return NextResponse.next();
-  // }
+  // Only bypass in development
+  if (process.env.NODE_ENV === 'development') {
+    console.log("Development mode: Bypassing Basic Auth");
+    return NextResponse.next();
+  }
   
   if (basicAuth) {
     const authValue = basicAuth.split(' ')[1]
     const [user, pwd] = atob(authValue).split(':')
 
     const validUser = process.env.BASIC_AUTH_USER
-    const validPass = process.env.BASIC_AUTH_PASSWORD // Updated to match .env.local
+    const validPass = process.env.BASIC_AUTH_PASSWORD
+
+    if (!validUser || !validPass) {
+      console.error('Basic Auth credentials not set in environment variables')
+      return NextResponse.next()
+    }
 
     if (user === validUser && pwd === validPass) {
       return NextResponse.next()
