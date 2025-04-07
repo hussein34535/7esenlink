@@ -4,10 +4,11 @@ export function middleware(req: NextRequest) {
   const basicAuth = req.headers.get('authorization')
   const url = req.nextUrl
 
-  // Allow requests to static files and images
+  // Allow requests to static files, images, and API routes
   if (url.pathname.startsWith('/_next/') || 
       url.pathname.includes('.') || 
-      url.pathname === '/api/auth') {
+      url.pathname === '/api/auth' ||
+      url.pathname.startsWith('/api/')) {
     return NextResponse.next()
   }
 
@@ -51,8 +52,9 @@ export const config = {
      * - _next/static (static files)
      * - _next/image (image optimization files)
      * - favicon.ico (favicon file)
+     * - api/ (API routes)
      */
-    "/((?!_next/static|_next/image|favicon.ico).*)",
+    "/((?!_next/static|_next/image|favicon.ico|api/).*)",
   ],
 }
 

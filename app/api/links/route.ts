@@ -7,12 +7,20 @@ const linksFile = path.join(dataDir, 'links.json')
 
 // Ensure data directory exists
 if (!fs.existsSync(dataDir)) {
-  fs.mkdirSync(dataDir, { recursive: true })
+  try {
+    fs.mkdirSync(dataDir, { recursive: true })
+  } catch (error) {
+    console.error('Error creating data directory:', error)
+  }
 }
 
 // Initialize links file if it doesn't exist
 if (!fs.existsSync(linksFile)) {
-  fs.writeFileSync(linksFile, JSON.stringify({ links: [], categories: [] }))
+  try {
+    fs.writeFileSync(linksFile, JSON.stringify({ links: [], categories: [] }))
+  } catch (error) {
+    console.error('Error initializing links file:', error)
+  }
 }
 
 interface Link {
@@ -34,12 +42,18 @@ function readLinks(): LinksData {
     const data = fs.readFileSync(linksFile, 'utf-8')
     return JSON.parse(data)
   } catch (error) {
+    console.error('Error reading links file:', error)
     return { links: [], categories: [] }
   }
 }
 
 function writeLinks(data: LinksData) {
-  fs.writeFileSync(linksFile, JSON.stringify(data, null, 2))
+  try {
+    fs.writeFileSync(linksFile, JSON.stringify(data, null, 2))
+  } catch (error) {
+    console.error('Error writing links file:', error)
+    throw new Error('Failed to write to storage')
+  }
 }
 
 export async function GET() {
@@ -47,6 +61,7 @@ export async function GET() {
     const data = readLinks()
     return NextResponse.json(data)
   } catch (error) {
+    console.error('Error in GET /api/links:', error)
     return NextResponse.json({ error: 'Failed to read links' }, { status: 500 })
   }
 }
@@ -78,7 +93,7 @@ export async function POST(request: Request) {
       id: newId,
       name,
       original,
-      converted: convertedUrl, // Use the new format
+      converted: convertedUrl,
       category: linkCategory,
       createdAt: new Date().toISOString()
     }
@@ -91,12 +106,19 @@ export async function POST(request: Request) {
       data.categories.push(linkCategory)
     }
 
-    // Write the updated data
-    writeLinks(data)
-
-    return NextResponse.json(newLink)
+    try {
+      // Write the updated data
+      writeLinks(data)
+      return NextResponse.json(newLink)
+    } catch (writeError) {
+      console.error('Error writing to storage:', writeError)
+      return NextResponse.json({ 
+        error: 'This feature is not available in production. Please use a database for persistent storage.',
+        details: 'The application is running in a serverless environment where file system writes are not allowed.'
+      }, { status: 500 })
+    }
   } catch (error) {
-    console.error('Error creating link:', error)
+    console.error('Error in POST /api/links:', error)
     return NextResponse.json({ error: 'Failed to create link' }, { status: 500 })
   }
 }
