@@ -4,7 +4,7 @@ import './globals.css'
 import Link from 'next/link'
 import { Inter } from 'next/font/google'
 import { useState } from 'react'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -19,6 +19,7 @@ export default function RootLayout({
   const navigation = [
     { name: 'Import', href: '/', icon: '📥' },
     { name: 'Links', href: '/links', icon: '📋' },
+    { name: 'Dashboard', href: '/dashboard', icon: '📊' },
   ]
 
   return (
