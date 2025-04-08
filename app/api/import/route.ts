@@ -1,13 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
-import { readFile, writeFile } from "fs/promises"
-import { join } from "path"
-import { existsSync } from "fs"
-import fs from "fs"
-import path from "path"
-
-const dataDir = join(process.cwd(), "data")
-const filePath = join(dataDir, "streams.json")
-const linksFile = path.join(dataDir, "links.json")
+import { database } from '@/lib/firebase'; // Import Firebase database instance
+import { ref, get, set } from 'firebase/database'; // Import Firebase functions
 
 interface Channel {
   id: number
@@ -18,62 +11,62 @@ interface Channel {
   updatedAt: string
 }
 
+// Keep the Link interface, but LinksData is no longer needed for file structure
 interface Link {
-  id: number
-  name: string
-  original: string
-  converted: string
-  category: string
-  createdAt: string
+    id: number;
+    name: string;
+    original: string;
+    converted: string;
+    category: string;
+    createdAt: string; // Ensure this matches the stream endpoint interface
 }
 
-interface LinksData {
-  links: Link[]
-  categories: string[]
-}
+// Remove functions related to reading/writing local files (readChannels, writeChannels, readLinks, writeLinks)
 
-async function readChannels(): Promise<Channel[]> {
-  try {
-    if (!existsSync(filePath)) {
-      return []
+// Function to get all links from Firebase
+async function getLinksFromFirebase(): Promise<Link[]> {
+    try {
+        const linksRef = ref(database, 'links');
+        const snapshot = await get(linksRef);
+        if (!snapshot.exists()) {
+            console.log('Firebase path /links does not exist. Returning empty array.');
+            return [];
+        }
+        // Handle both array and object structures from Firebase
+        const linksData = snapshot.val();
+        const linksArray: Link[] = Array.isArray(linksData)
+            ? linksData
+            : Object.values(linksData || {});
+        
+        // Basic validation for each link (optional but recommended)
+        return linksArray.filter(link =>
+            link &&
+            typeof link.id === 'number' &&
+            typeof link.name === 'string' &&
+            typeof link.original === 'string' &&
+            typeof link.converted === 'string' &&
+            typeof link.category === 'string' &&
+            typeof link.createdAt === 'string'
+        );
+    } catch (error) {
+        console.error(`Error reading links from Firebase:`, error);
+        // Depending on requirements, you might want to throw the error
+        // or return an empty array to allow the import to proceed partially/fail gracefully.
+        return [];
     }
-    const content = await readFile(filePath, "utf8")
-    return JSON.parse(content)
-  } catch (e) {
-    console.error("Error reading channels:", e)
-    return []
-  }
 }
 
-async function writeChannels(channels: Channel[]) {
-  try {
-    await writeFile(filePath, JSON.stringify(channels, null, 2))
-  } catch (e) {
-    console.error("Error writing channels:", e)
-  }
-}
-
-function readLinks(): LinksData {
-  try {
-    const data = fs.readFileSync(linksFile, "utf-8")
-    const parsedData = JSON.parse(data)
-    return {
-      links: Array.isArray(parsedData.links) ? parsedData.links : [],
-      categories: Array.isArray(parsedData.categories) ? parsedData.categories : []
+// Function to write all links to Firebase (overwrites existing data at /links)
+async function writeLinksToFirebase(links: Link[]): Promise<void> {
+    try {
+        const linksRef = ref(database, 'links');
+        // Overwrite the entire /links path with the new array
+        await set(linksRef, links);
+        console.log(`Successfully wrote ${links.length} links to Firebase.`);
+    } catch (error) {
+        console.error(`Error writing links to Firebase:`, error);
+        throw error; // Re-throw the error to be caught by the main handler
     }
-  } catch (error) {
-    console.error("Error reading links file:", error)
-    return { links: [], categories: [] }
-  }
-}
-
-function writeLinks(data: LinksData) {
-  try {
-    fs.writeFileSync(linksFile, JSON.stringify(data, null, 2))
-  } catch (error) {
-    console.error("Error writing links file:", error)
-    throw error
-  }
 }
 
 // M3U Parser (Simplified)
@@ -153,9 +146,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const data = readLinks();
-    let currentMaxId = data.links.length > 0 ? Math.max(...data.links.map(l => l.id)) : 0;
-
+    // Read existing links from Firebase
+    const existingLinks = await getLinksFromFirebase();
+    let currentMaxId = existingLinks.length > 0 ? Math.max(...existingLinks.map(l => l.id)) : 0;
     const newLinks: Link[] = newChannels.map(channel => {
       currentMaxId++;
       return {
@@ -169,14 +162,11 @@ export async function POST(request: NextRequest) {
     });
 
     // Add new links
-    data.links.push(...newLinks);
+    // Combine existing and new links
+    const updatedLinks = [...existingLinks, ...newLinks];
 
-    // Update categories if needed
-    if (!data.categories.includes(category)) {
-      data.categories.push(category);
-    }
-
-    writeLinks(data);
+    // Write the combined list back to Firebase
+    await writeLinksToFirebase(updatedLinks);
 
     return NextResponse.json({
       success: true,
