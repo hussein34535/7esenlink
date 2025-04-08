@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { database } from '@/lib/firebase'; // Import Firebase database instance
 import { ref, get } from 'firebase/database'; // Import Firebase functions
-import { rewriteM3U8URLs } from '@/lib/m3u-parser'; // Import the new function
+// Removed M3U8 parser import as it's no longer used
 
 interface Link {
   id: number;
@@ -94,107 +94,17 @@ export async function GET(
         return NextResponse.json({ error: 'Original URL not found for this link' }, { status: 404 });
     }
 
-    // Ensure URL has protocol
-    const urlWithProtocol = originalUrl.startsWith('http://') || originalUrl.startsWith('https://') 
-      ? originalUrl 
+    // Ensure URL has protocol before redirecting
+    const urlToRedirect = originalUrl.startsWith('http://') || originalUrl.startsWith('https://')
+      ? originalUrl
       : `http://${originalUrl}`;
-    console.log(`Fetching stream from: ${urlWithProtocol}`);
 
-    // --- Fetch the stream with redirect handling ---
-    let currentUrl = urlWithProtocol;
-    let response: Response | null = null;
-    const maxRedirects = 5;
-    let redirectCount = 0;
-    const fetchHeaders = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-    };
-
-    while (redirectCount < maxRedirects) {
-        console.log(`Fetching attempt ${redirectCount + 1} from: ${currentUrl}`);
-        response = await fetch(currentUrl, {
-            headers: fetchHeaders,
-            redirect: 'manual' // Important: handle redirects manually
-        });
-
-        // Check for redirect status codes (301, 302, 303, 307, 308)
-        if ([301, 302, 303, 307, 308].includes(response.status)) {
-            const locationHeader = response.headers.get('location');
-            if (locationHeader) {
-                // Resolve the new URL relative to the current one if necessary
-                currentUrl = new URL(locationHeader, currentUrl).toString();
-                redirectCount++;
-                console.log(`Redirecting to: ${currentUrl}`);
-                continue; // Go to the next iteration to fetch the new URL
-            } else {
-                throw new Error(`Redirect response missing Location header from ${currentUrl}`);
-            }
-        } else {
-            // Not a redirect, break the loop
-            break;
-        }
-    }
-
-    if (!response) {
-         throw new Error('Failed to get a response after fetch attempts.');
-    }
+    console.log(`Redirecting client to: ${urlToRedirect}`);
     
-    if (redirectCount >= maxRedirects) {
-        throw new Error(`Exceeded maximum redirect limit (${maxRedirects})`);
-    }
-
-    // Check if the final response is OK
-    if (!response.ok) {
-        console.error(`Failed to fetch stream from final URL ${currentUrl}: ${response.status} ${response.statusText}`);
-        const errorBody = await response.text().catch(() => 'Could not read error body');
-        throw new Error(`Upstream fetch failed: ${response.status} ${response.statusText}. Body: ${errorBody}`);
-    }
-    // --- End fetch with redirect handling ---
-
-    // Get the content type from the original response
-    const contentType = response.headers.get('content-type') || 'application/octet-stream';
-    console.log(`Received Content-Type: ${contentType} from ${urlWithProtocol}`);
-
-    // Check if it's an M3U8 playlist (including common variations)
-    if (contentType.includes('application/vnd.apple.mpegurl') || contentType.includes('audio/mpegurl') || contentType.includes('application/x-mpegurl')) {
-        console.log(`Detected M3U8 playlist for ID ${linkId}. Rewriting URLs...`);
-        const m3u8Content = await response.text();
-        
-        // Calculate base URL (directory containing the m3u8 file)
-        const originalUrlObject = new URL(urlWithProtocol);
-        // Ensure the base URL ends with a slash if it points to a directory-like structure
-        const baseUrl = originalUrlObject.pathname.endsWith('/')
-            ? originalUrlObject.href
-            : originalUrlObject.href.substring(0, originalUrlObject.href.lastIndexOf('/') + 1);
-        console.log(`Calculated Base URL: ${baseUrl}`);
-
-        const rewrittenContent = rewriteM3U8URLs(m3u8Content, baseUrl);
-
-        // Return the modified M3U8 content
-        return new NextResponse(rewrittenContent, {
-            status: 200, // Use 200 OK for the modified playlist
-            headers: {
-                'Content-Type': contentType, // Keep original M3U8 content type
-                'X-Channel-Name': encodeURIComponent(link.name),
-                'X-Channel-Category': encodeURIComponent(link.category)
-            }
-        });
-
-    } else {
-        // Not an M3U8 playlist, stream the content directly
-        console.log(`Streaming non-M3U8 content for ID ${linkId} with Content-Type: ${contentType}`);
-        const streamResponse = new NextResponse(response.body, {
-            status: response.status,
-            statusText: response.statusText,
-            headers: {
-                'Content-Type': contentType,
-                // Add other relevant headers from the original response if needed
-                // 'Content-Length': response.headers.get('Content-Length') || '',
-                'X-Channel-Name': encodeURIComponent(link.name),
-                'X-Channel-Category': encodeURIComponent(link.category)
-            }
-        });
-        return streamResponse;
-    }
+    // Return a 302 redirect response
+    // Using 307 (Temporary Redirect) might be slightly more appropriate semantically
+    // as the resource itself hasn't moved, we're just directing the client there for this request.
+    return NextResponse.redirect(urlToRedirect, 307);
 
   } catch (error) {
     console.error('Error in stream endpoint:', error);
