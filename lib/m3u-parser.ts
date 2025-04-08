@@ -107,3 +107,51 @@ export async function processPastedM3U(content: string): Promise<Channels> {
   return streams;
 }
 
+/**
+ * Rewrites relative URLs in M3U8 content to absolute URLs.
+ * @param m3u8Content The M3U8 playlist content as a string.
+ * @param baseUrl The base URL of the original M3U8 file (e.g., "http://example.com/stream/").
+ * @returns The M3U8 content with absolute URLs.
+ */
+export function rewriteM3U8URLs(m3u8Content: string, baseUrl: string): string {
+  const lines = m3u8Content.split('\n');
+  const rewrittenLines = lines.map(line => {
+    line = line.trim();
+    if (!line || line.startsWith('#EXT-X-KEY:NONE')) { // Keep empty lines and specific tags as is
+        return line;
+    }
+
+    // Handle URI attributes in tags like #EXT-X-MEDIA, #EXT-X-STREAM-INF (though less common), #EXT-X-KEY
+    if (line.startsWith('#') && line.includes('URI="')) {
+      const uriMatch = line.match(/URI="([^"]+)"/);
+      if (uriMatch && uriMatch[1]) {
+        const relativeUri = uriMatch[1];
+        // Only rewrite if it's not already an absolute URL
+        if (!relativeUri.startsWith('http://') && !relativeUri.startsWith('https://')) {
+          try {
+            const absoluteUrl = new URL(relativeUri, baseUrl).toString();
+            return line.replace(uriMatch[0], `URI="${absoluteUrl}"`);
+          } catch (e) {
+             console.error(`Error creating absolute URL for URI: ${relativeUri} with base: ${baseUrl}`, e);
+             return line; // Keep original line on error
+          }
+        }
+      }
+    }
+    // Handle lines that are just relative paths (media segments or playlist references)
+    else if (!line.startsWith('#') && !line.startsWith('http://') && !line.startsWith('https://')) {
+       try {
+           const absoluteUrl = new URL(line, baseUrl).toString();
+           return absoluteUrl;
+       } catch (e) {
+           console.error(`Error creating absolute URL for path: ${line} with base: ${baseUrl}`, e);
+           return line; // Keep original line on error
+       }
+    }
+    
+    // Return unchanged line if no modification was needed
+    return line;
+  });
+
+  return rewrittenLines.join('\n');
+}

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { database } from '@/lib/firebase'; // Import Firebase database instance
 import { ref, get } from 'firebase/database'; // Import Firebase functions
+import { rewriteM3U8URLs } from '@/lib/m3u-parser'; // Import the new function
 
 interface Link {
   id: number;
@@ -115,23 +116,49 @@ export async function GET(
 
     // Get the content type from the original response
     const contentType = response.headers.get('content-type') || 'application/octet-stream';
-    console.log(`Received Content-Type: ${contentType}`);
+    console.log(`Received Content-Type: ${contentType} from ${urlWithProtocol}`);
 
-    // Create response with the stream
-    const streamResponse = new NextResponse(response.body, {
-      status: response.status,
-      statusText: response.statusText,
-      headers: {
-        'Content-Type': contentType,
-        // Add other relevant headers from the original response if needed
-        // 'Content-Length': response.headers.get('Content-Length') || '',
-        'X-Channel-Name': encodeURIComponent(link.name),
-        'X-Channel-Category': encodeURIComponent(link.category)
-      }
-    });
+    // Check if it's an M3U8 playlist
+    if (contentType.includes('application/vnd.apple.mpegurl') || contentType.includes('audio/mpegurl')) {
+        console.log(`Detected M3U8 playlist for ID ${linkId}. Rewriting URLs...`);
+        const m3u8Content = await response.text();
+        
+        // Calculate base URL (directory containing the m3u8 file)
+        const originalUrlObject = new URL(urlWithProtocol);
+        // Ensure the base URL ends with a slash if it points to a directory-like structure
+        const baseUrl = originalUrlObject.pathname.endsWith('/')
+            ? originalUrlObject.href
+            : originalUrlObject.href.substring(0, originalUrlObject.href.lastIndexOf('/') + 1);
+        console.log(`Calculated Base URL: ${baseUrl}`);
 
-    console.log(`Streaming response for ID ${linkId} with Content-Type: ${contentType}`);
-    return streamResponse;
+        const rewrittenContent = rewriteM3U8URLs(m3u8Content, baseUrl);
+
+        // Return the modified M3U8 content
+        return new NextResponse(rewrittenContent, {
+            status: 200, // Use 200 OK for the modified playlist
+            headers: {
+                'Content-Type': contentType, // Keep original M3U8 content type
+                'X-Channel-Name': encodeURIComponent(link.name),
+                'X-Channel-Category': encodeURIComponent(link.category)
+            }
+        });
+
+    } else {
+        // Not an M3U8 playlist, stream the content directly
+        console.log(`Streaming non-M3U8 content for ID ${linkId} with Content-Type: ${contentType}`);
+        const streamResponse = new NextResponse(response.body, {
+            status: response.status,
+            statusText: response.statusText,
+            headers: {
+                'Content-Type': contentType,
+                // Add other relevant headers from the original response if needed
+                // 'Content-Length': response.headers.get('Content-Length') || '',
+                'X-Channel-Name': encodeURIComponent(link.name),
+                'X-Channel-Category': encodeURIComponent(link.category)
+            }
+        });
+        return streamResponse;
+    }
 
   } catch (error) {
     console.error('Error in stream endpoint:', error);
