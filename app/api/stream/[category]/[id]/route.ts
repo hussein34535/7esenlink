@@ -100,21 +100,55 @@ export async function GET(
       : `http://${originalUrl}`;
     console.log(`Fetching stream from: ${urlWithProtocol}`);
 
-    // Fetch the stream
-    const response = await fetch(urlWithProtocol, {
-        headers: {
-            // Use a common browser User-Agent, as some servers block generic or custom ones
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-            // Removed Referer header as it caused 403 for some streams
-        }
-    });
+    // --- Fetch the stream with redirect handling ---
+    let currentUrl = urlWithProtocol;
+    let response: Response | null = null;
+    const maxRedirects = 5;
+    let redirectCount = 0;
+    const fetchHeaders = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+    };
 
+    while (redirectCount < maxRedirects) {
+        console.log(`Fetching attempt ${redirectCount + 1} from: ${currentUrl}`);
+        response = await fetch(currentUrl, {
+            headers: fetchHeaders,
+            redirect: 'manual' // Important: handle redirects manually
+        });
+
+        // Check for redirect status codes (301, 302, 303, 307, 308)
+        if ([301, 302, 303, 307, 308].includes(response.status)) {
+            const locationHeader = response.headers.get('location');
+            if (locationHeader) {
+                // Resolve the new URL relative to the current one if necessary
+                currentUrl = new URL(locationHeader, currentUrl).toString();
+                redirectCount++;
+                console.log(`Redirecting to: ${currentUrl}`);
+                continue; // Go to the next iteration to fetch the new URL
+            } else {
+                throw new Error(`Redirect response missing Location header from ${currentUrl}`);
+            }
+        } else {
+            // Not a redirect, break the loop
+            break;
+        }
+    }
+
+    if (!response) {
+         throw new Error('Failed to get a response after fetch attempts.');
+    }
+    
+    if (redirectCount >= maxRedirects) {
+        throw new Error(`Exceeded maximum redirect limit (${maxRedirects})`);
+    }
+
+    // Check if the final response is OK
     if (!response.ok) {
-        console.error(`Failed to fetch stream from ${urlWithProtocol}: ${response.status} ${response.statusText}`);
-        // Try to read the error body if possible
+        console.error(`Failed to fetch stream from final URL ${currentUrl}: ${response.status} ${response.statusText}`);
         const errorBody = await response.text().catch(() => 'Could not read error body');
         throw new Error(`Upstream fetch failed: ${response.status} ${response.statusText}. Body: ${errorBody}`);
     }
+    // --- End fetch with redirect handling ---
 
     // Get the content type from the original response
     const contentType = response.headers.get('content-type') || 'application/octet-stream';
