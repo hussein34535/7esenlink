@@ -51,13 +51,14 @@ async function getLinkById(id: number): Promise<Link | null> {
     return null; // Return null on error
   }
 }
-
 export async function GET(
   request: Request,
-  { params }: { params: { category: string; id: string } }
+  context: { params: { category: string; id: string } } // Use a different name like 'context'
 ) {
   try {
-    const { category, id } = params;
+    // Access params from the context object
+    const { category, id } = context.params;
+    console.log(`Received request for category: ${category}, id: ${id}`);
     console.log(`Received request for category: ${category}, id: ${id}`);
 
     // Validate ID
@@ -100,11 +101,12 @@ export async function GET(
     console.log(`Fetching stream from: ${urlWithProtocol}`);
 
     // Fetch the stream
-    const response = await fetch(urlWithProtocol, { 
-        headers: { 
-            // Add headers if needed by the source, e.g., User-Agent
-            'User-Agent': 'IPTVRedirect/1.0' 
-        } 
+    const response = await fetch(urlWithProtocol, {
+        headers: {
+            // Use a common browser User-Agent, as some servers block generic or custom ones
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            // Removed Referer header as it caused 403 for some streams
+        }
     });
 
     if (!response.ok) {
@@ -118,8 +120,8 @@ export async function GET(
     const contentType = response.headers.get('content-type') || 'application/octet-stream';
     console.log(`Received Content-Type: ${contentType} from ${urlWithProtocol}`);
 
-    // Check if it's an M3U8 playlist
-    if (contentType.includes('application/vnd.apple.mpegurl') || contentType.includes('audio/mpegurl')) {
+    // Check if it's an M3U8 playlist (including common variations)
+    if (contentType.includes('application/vnd.apple.mpegurl') || contentType.includes('audio/mpegurl') || contentType.includes('application/x-mpegurl')) {
         console.log(`Detected M3U8 playlist for ID ${linkId}. Rewriting URLs...`);
         const m3u8Content = await response.text();
         

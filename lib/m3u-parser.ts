@@ -125,11 +125,19 @@ export function rewriteM3U8URLs(m3u8Content: string, baseUrl: string): string {
     if (line.startsWith('#') && line.includes('URI="')) {
       const uriMatch = line.match(/URI="([^"]+)"/);
       if (uriMatch && uriMatch[1]) {
-        const relativeUri = uriMatch[1];
+        let relativeUri = uriMatch[1];
+        let absoluteUrl = '';
         // Only rewrite if it's not already an absolute URL
         if (!relativeUri.startsWith('http://') && !relativeUri.startsWith('https://')) {
           try {
-            const absoluteUrl = new URL(relativeUri, baseUrl).toString();
+            // If the relative URI starts with '/', resolve it against the origin of the base URL
+            if (relativeUri.startsWith('/')) {
+              const baseOrigin = new URL(baseUrl).origin;
+              absoluteUrl = baseOrigin + relativeUri;
+            } else {
+              // Otherwise, resolve relative to the full base URL path
+              absoluteUrl = new URL(relativeUri, baseUrl).toString();
+            }
             return line.replace(uriMatch[0], `URI="${absoluteUrl}"`);
           } catch (e) {
              console.error(`Error creating absolute URL for URI: ${relativeUri} with base: ${baseUrl}`, e);
@@ -140,8 +148,16 @@ export function rewriteM3U8URLs(m3u8Content: string, baseUrl: string): string {
     }
     // Handle lines that are just relative paths (media segments or playlist references)
     else if (!line.startsWith('#') && !line.startsWith('http://') && !line.startsWith('https://')) {
+       let absoluteUrl = '';
        try {
-           const absoluteUrl = new URL(line, baseUrl).toString();
+           // If the relative path starts with '/', resolve it against the origin of the base URL
+           if (line.startsWith('/')) {
+               const baseOrigin = new URL(baseUrl).origin;
+               absoluteUrl = baseOrigin + line;
+           } else {
+               // Otherwise, resolve relative to the full base URL path
+               absoluteUrl = new URL(line, baseUrl).toString();
+           }
            return absoluteUrl;
        } catch (e) {
            console.error(`Error creating absolute URL for path: ${line} with base: ${baseUrl}`, e);
