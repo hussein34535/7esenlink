@@ -3,7 +3,7 @@
     {
       "id": 1,
       "name": "beIN SPORTS 1 4K",
-      "original": "http://cyberfamily.sytes.net:25461/live/cyber4k/xtreamtv/3.m3u8",
+      "original": "http://173.212.193.243:8080/live/EGJct7UyMD/l97PbPoFVd/879.ts",
       "converted": "/api/stream/beinfhd/1",
       "category": "beinFHD",
       "createdAt": "2025-04-07T00:00:21.909Z"

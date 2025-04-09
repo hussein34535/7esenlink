@@ -1,10 +1,8 @@
-import { NextResponse } from 'next/server'
-import fs from 'fs'
-import path from 'path'
+import { NextRequest, NextResponse } from 'next/server'
+import { database } from '@/lib/firebase'; // Import Firebase database instance
+import { ref, get, set } from 'firebase/database'; // Import Firebase functions
 
-const dataDir = path.join(process.cwd(), 'data')
-const linksFile = path.join(dataDir, 'links.json')
-
+// Keep the Link interface consistent
 interface Link {
   id: number
   name: string
@@ -14,28 +12,52 @@ interface Link {
   createdAt: string
 }
 
-interface LinksData {
-  links: Link[]
-  categories: string[]
+// Function to get all links from Firebase (copied from import route for consistency)
+async function getLinksFromFirebase(): Promise<Link[]> {
+    try {
+        const linksRef = ref(database, 'links');
+        const snapshot = await get(linksRef);
+        if (!snapshot.exists()) {
+            console.log('Firebase path /links does not exist. Returning empty array.');
+            return [];
+        }
+        // Handle both array and object structures from Firebase
+        const linksData = snapshot.val();
+        const linksArray: Link[] = Array.isArray(linksData)
+            ? linksData.filter(link => link !== null) // Filter out potential nulls if stored as sparse array
+            : Object.values(linksData || {});
+
+        // Basic validation for each link (optional but recommended)
+        return linksArray.filter(link =>
+            link &&
+            typeof link.id === 'number' &&
+            typeof link.name === 'string' &&
+            typeof link.original === 'string' &&
+            typeof link.converted === 'string' &&
+            typeof link.category === 'string' &&
+            typeof link.createdAt === 'string'
+        );
+    } catch (error) {
+        console.error(`Error reading links from Firebase:`, error);
+        // Depending on requirements, you might want to throw the error
+        // or return an empty array to allow the operation to fail gracefully.
+        throw new Error('Failed to read links from Firebase');
+    }
 }
 
-function readLinks(): LinksData {
-  try {
-    const data = fs.readFileSync(linksFile, 'utf-8')
-    const parsed = JSON.parse(data)
-    return parsed
-  } catch (error) {
-    console.error('Error reading links file:', error)
-    return { links: [], categories: [] }
-  }
-}
-
-function writeLinks(data: LinksData) {
-  try {
-    fs.writeFileSync(linksFile, JSON.stringify(data, null, 2))
-  } catch (error) {
-    console.error('Error writing links file:', error)
-  }
+// Function to write all links to Firebase (overwrites existing data at /links)
+async function writeLinksToFirebase(links: Link[]): Promise<void> {
+    try {
+        const linksRef = ref(database, 'links');
+        // Overwrite the entire /links path with the new array
+        // Ensure nulls aren't written if Firebase expects dense arrays or objects
+        const dataToWrite = links.filter(link => link !== null);
+        await set(linksRef, dataToWrite);
+        console.log(`Successfully wrote ${dataToWrite.length} links to Firebase.`);
+    } catch (error) {
+        console.error(`Error writing links to Firebase:`, error);
+        throw error; // Re-throw the error to be caught by the main handler
+    }
 }
 
 // Function to parse M3U content and extract URLs
@@ -45,7 +67,8 @@ function parseM3UUrls(content: string): string[] {
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i].trim()
-    if (line && !line.startsWith('#')) {
+    // Ensure it's a URL (simple check for http/https) and not empty/comment
+    if (line && !line.startsWith('#') && (line.startsWith('http://') || line.startsWith('https://'))) {
       urls.push(line)
     }
   }
@@ -53,7 +76,7 @@ function parseM3UUrls(content: string): string[] {
   return urls
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
     const { linkIds, m3uContent } = await request.json()
 
@@ -71,7 +94,7 @@ export async function POST(request: Request) {
     }
 
     if (urls.length !== linkIds.length) {
-      return NextResponse.json({ 
+      return NextResponse.json({
         error: 'Number of URLs in M3U content does not match number of selected links',
         details: {
           selectedLinks: linkIds.length,
@@ -80,37 +103,47 @@ export async function POST(request: Request) {
       }, { status: 400 })
     }
 
-    const data = readLinks()
-    if (!data.links || !Array.isArray(data.links)) {
-      return NextResponse.json({ error: 'Invalid data structure' }, { status: 500 })
-    }
+    // Read existing links from Firebase
+    const existingLinks = await getLinksFromFirebase();
+
+    // Create a map for faster lookup
+    const linksMap = new Map<number, Link>(existingLinks.map(link => [link.id, link]));
 
     // Update each selected link with the corresponding URL
-    let updatedCount = 0
+    let updatedCount = 0;
+    const updatedLinks = [...existingLinks]; // Create a mutable copy
+
     linkIds.forEach((linkId, index) => {
-      const link = data.links.find(l => l.id === linkId)
-      if (link) {
-        link.original = urls[index]
-        updatedCount++
+      const linkIndex = updatedLinks.findIndex(l => l.id === linkId);
+      if (linkIndex !== -1) {
+        updatedLinks[linkIndex] = {
+            ...updatedLinks[linkIndex],
+            original: urls[index] // Update the original URL
+        };
+        updatedCount++;
+      } else {
+          console.warn(`Link with ID ${linkId} not found in Firebase data.`);
       }
-    })
+    });
 
     if (updatedCount === 0) {
-      return NextResponse.json({ error: 'No links were updated' }, { status: 400 })
+      // This could happen if the selected IDs don't exist in Firebase anymore
+      return NextResponse.json({ error: 'No matching links found to update' }, { status: 404 })
     }
 
-    writeLinks(data)
+    // Write the updated list back to Firebase
+    await writeLinksToFirebase(updatedLinks);
 
-    return NextResponse.json({ 
+    return NextResponse.json({
       message: `Successfully updated ${updatedCount} links`,
       updatedCount
     })
 
   } catch (error) {
     console.error('Error updating links:', error)
-    return NextResponse.json({ 
+    return NextResponse.json({
       error: 'Failed to update links',
       details: error instanceof Error ? error.message : 'Unknown error'
     }, { status: 500 })
   }
-} 
+}
