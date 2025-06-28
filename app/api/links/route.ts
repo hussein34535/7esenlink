@@ -129,9 +129,17 @@ export async function POST(request: Request) {
     // Fetch current data (links and categories separately)
     const currentLinks = await getLinks();
     const currentCategories = await getCategories();
-    
-    const newId = currentLinks.length > 0 ? Math.max(...currentLinks.map(l => l.id)) + 1 : 1
-    const linkCategory = category || 'Uncategorized'
+
+    const linkCategory = category || 'Uncategorized' // Determine the category first
+
+    // Filter links by the current category to find the max ID within that category
+    const linksInCurrentCategory = currentLinks.filter(link => link.category === linkCategory);
+
+    // Calculate newId based on links in the specific category
+    const newId = linksInCurrentCategory.length > 0
+      ? Math.max(...linksInCurrentCategory.map(l => l.id)) + 1
+      : 1;
+
     const convertedUrl = `/api/stream/${linkCategory.toLowerCase()}/${newId}`
 
     const newLink: Link = {

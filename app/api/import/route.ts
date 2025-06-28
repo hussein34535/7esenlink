@@ -148,7 +148,15 @@ export async function POST(request: NextRequest) {
 
     // Read existing links from Firebase
     const existingLinks = await getLinksFromFirebase();
-    let currentMaxId = existingLinks.length > 0 ? Math.max(...existingLinks.map(l => l.id)) : 0;
+
+    // Filter existing links by the current import category
+    const existingLinksInCurrentCategory = existingLinks.filter(link => link.category === category);
+
+    // Calculate currentMaxId based only on links within the current category
+    let currentMaxId = existingLinksInCurrentCategory.length > 0
+      ? Math.max(...existingLinksInCurrentCategory.map(l => l.id))
+      : 0;
+
     const newLinks: Link[] = newChannels.map(channel => {
       currentMaxId++;
       return {
@@ -163,7 +171,7 @@ export async function POST(request: NextRequest) {
 
     // Add new links
     // Combine existing and new links
-    const updatedLinks = [...existingLinks, ...newLinks];
+    const updatedLinks = [...existingLinksInCurrentCategory, ...newLinks];
 
     // Write the combined list back to Firebase
     await writeLinksToFirebase(updatedLinks);
