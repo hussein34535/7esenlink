@@ -169,9 +169,9 @@ export async function POST(request: NextRequest) {
       };
     });
 
-    // Add new links
-    // Combine existing and new links
-    const updatedLinks = [...existingLinksInCurrentCategory, ...newLinks];
+    // Combine existing links (excluding those of the current category) with the new links for this category
+    const otherExistingLinks = existingLinks.filter(link => link.category !== category);
+    const updatedLinks = [...otherExistingLinks, ...newLinks];
 
     // Write the combined list back to Firebase
     await writeLinksToFirebase(updatedLinks);

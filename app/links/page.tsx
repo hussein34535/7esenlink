@@ -500,11 +500,7 @@ http://example.com/stream3
                         hour: '2-digit', minute: '2-digit'
                       });
                       return (
-                        <TableRow
-                          key={link.id}
-                          data-state={isSelected ? "selected" : ""}
-                          className="hover:bg-muted/50 align-top" // Use align-top for better layout with multi-line content
-                        >
+                        <TableRow key={`${link.category}-${link.id}`} className={isSelected ? "bg-muted" : ""}>
                           <TableCell className="py-3 px-4">
                               <Checkbox
                                 checked={isSelected}
