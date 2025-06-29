@@ -177,18 +177,22 @@ export async function POST(request: Request) {
 export async function DELETE(request: Request) {
   // !!! THIS FUNCTION NEEDS UPDATING !!!
   try {
-    const { ids } = await request.json()
+    const { linksToDelete } = await request.json(); // Expect array of { id: number, category: string }
 
-    if (!Array.isArray(ids)) {
-      return NextResponse.json({ error: 'IDs must be an array' }, { status: 400 })
+    if (!Array.isArray(linksToDelete)) {
+      return NextResponse.json({ error: 'Links to delete must be an array' }, { status: 400 });
     }
 
     // Fetch current links
     const currentLinks = await getLinks();
     const originalLength = currentLinks.length;
     
-    // Filter links
-    const updatedLinks = currentLinks.filter(link => !ids.includes(link.id));
+    // Filter links: keep only those not in the linksToDelete array (matching both id and category)
+    const updatedLinks = currentLinks.filter(currentLink => 
+      !linksToDelete.some(linkToDelete => 
+        linkToDelete.id === currentLink.id && linkToDelete.category === currentLink.category
+      )
+    );
 
     // Recalculate categories from remaining links
     const remainingCategories = Array.from(new Set(updatedLinks.map(link => link.category).filter(c => c !== 'Uncategorized')));

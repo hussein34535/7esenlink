@@ -49,7 +49,7 @@ export default function LinksPage() {
   const [error, setError] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<string>("all")
-  const [selectedLinks, setSelectedLinks] = useState<number[]>([])
+  const [selectedLinks, setSelectedLinks] = useState<string[]>([])
   const [newCategory, setNewCategory] = useState("")
   const [showNewCategoryInput, setShowNewCategoryInput] = useState(false)
   const [baseUrl, setBaseUrl] = useState("")
@@ -209,9 +209,9 @@ export default function LinksPage() {
     }
   }
 
-  const deleteLinks = async (ids: number[]) => {
-    if (ids.length === 0) return;
-    if (!confirm(`Are you sure you want to delete ${ids.length} selected link(s)?`)) {
+  const deleteLinks = async (compositeKeys: string[]) => {
+    if (compositeKeys.length === 0) return;
+    if (!confirm(`Are you sure you want to delete ${compositeKeys.length} selected link(s)?`)) {
       return
     }
     setIsActionLoading(true);
@@ -219,16 +219,22 @@ export default function LinksPage() {
     const originalSelected = [...selectedLinks];
 
     // Optimistic update
-    setLinks(prevLinks => prevLinks.filter(link => !ids.includes(link.id)))
-    setSelectedLinks(prevSelected => prevSelected.filter(id => !ids.includes(id)));
+    setLinks(prevLinks => prevLinks.filter(link => !compositeKeys.includes(`${link.category}-${link.id}`)));
+    setSelectedLinks(prevSelected => prevSelected.filter(key => !compositeKeys.includes(key)));
 
     try {
+      // Prepare the array of objects { id, category } for the backend
+      const linksToDelete = compositeKeys.map(key => {
+        const [categoryStr, idStr] = key.split('-');
+        return { id: parseInt(idStr), category: categoryStr };
+      });
+
       const response = await fetch('/api/links', {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ ids }),
+        body: JSON.stringify({ linksToDelete }),
       })
 
       if (!response.ok) {
@@ -236,7 +242,7 @@ export default function LinksPage() {
         throw new Error(error.message || 'Failed to delete links')
       }
 
-      toast.success(`${ids.length} link(s) deleted successfully`)
+      toast.success(`${compositeKeys.length} link(s) deleted successfully`)
       // No need to update state again if optimistic update was successful
     } catch (err) {
       console.error('Error deleting links:', err);
@@ -249,17 +255,17 @@ export default function LinksPage() {
     }
   }
 
-  const handleSelectLink = (id: number, checked: boolean | 'indeterminate') => {
+  const handleSelectLink = (compositeKey: string, checked: boolean | 'indeterminate') => {
     setSelectedLinks(prev =>
       checked === true
-        ? [...prev, id]
-        : prev.filter(selectedId => selectedId !== id)
+        ? [...prev, compositeKey]
+        : prev.filter(selectedKey => selectedKey !== compositeKey)
     );
   };
 
   const handleSelectAll = (checked: boolean | 'indeterminate') => {
     if (checked === true) {
-      setSelectedLinks(filteredLinks.map(link => link.id));
+      setSelectedLinks(filteredLinks.map(link => `${link.category}-${link.id}`));
     } else {
       setSelectedLinks([]);
     }
@@ -494,20 +500,19 @@ http://example.com/stream3
                   {filteredLinks.length > 0 ? (
                     filteredLinks.map((link) => {
                       const fullConvertedUrl = baseUrl ? `${baseUrl}${link.converted}` : link.converted;
-                      const isSelected = selectedLinks.includes(link.id);
+                      const isSelected = selectedLinks.includes(`${link.category}-${link.id}`);
                       const createdDate = new Date(link.createdAt).toLocaleDateString('en-US', {
                         year: 'numeric', month: 'short', day: 'numeric',
                         hour: '2-digit', minute: '2-digit'
                       });
                       return (
                         <TableRow key={`${link.category}-${link.id}`} className={isSelected ? "bg-muted" : ""}>
-                          <TableCell className="py-3 px-4">
-                              <Checkbox
-                                checked={isSelected}
-                                onCheckedChange={(checked) => handleSelectLink(link.id, checked)}
-                                aria-label={`Select row for ${link.name}`}
-                                className="mt-1"
-                              />
+                          <TableCell className="px-4">
+                            <Checkbox
+                              checked={isSelected}
+                              onCheckedChange={(checked) => handleSelectLink(`${link.category}-${link.id}`, checked)}
+                              aria-label={`Select link ${link.name}`}
+                            />
                           </TableCell>
                           <TableCell className="py-3 px-4 font-medium">
                              <div className="flex flex-col gap-2">
@@ -573,13 +578,13 @@ http://example.com/stream3
                             <Button
                               variant="ghost"
                               size="sm"
-                              onClick={() => deleteLinks([link.id])}
+                              onClick={() => deleteLinks([`${link.category}-${link.id}`])}
                               title="Delete link"
                               className="w-fit h-auto p-1 text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
                               disabled={isActionLoading}
                             >
                                {/* Show loader specific to this row if deleting just this one */}
-                               {isActionLoading && selectedLinks.length === 1 && selectedLinks[0] === link.id ?
+                               {isActionLoading && selectedLinks.length === 1 && selectedLinks[0] === `${link.category}-${link.id}` ?
                                 <Loader2 className="h-3 w-3 mr-1 animate-spin"/> :
                                 <Trash2 className="h-3 w-3 mr-1" />}
                               Delete
