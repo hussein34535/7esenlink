@@ -56,6 +56,7 @@ export default function LinksPage() {
   const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false)
   const [m3uContent, setM3uContent] = useState('')
   const [isActionLoading, setIsActionLoading] = useState(false)
+  const [isManageCategoriesModalOpen, setIsManageCategoriesModalOpen] = useState(false)
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -414,15 +415,25 @@ http://example.com/stream3
             </Button>
           </div>
         ) : (
-          <Button
-            variant="outline"
-            onClick={() => setShowNewCategoryInput(true)}
-            className="w-full md:w-auto"
-            disabled={isActionLoading} // Disable if any action is loading
-          >
-            <Plus className="h-4 w-4 mr-2" />
-            Add Category
-          </Button>
+          <div className="flex gap-2 w-full md:w-auto">
+            <Button
+              variant="outline"
+              onClick={() => setShowNewCategoryInput(true)}
+              className="flex-grow"
+              disabled={isActionLoading} // Disable if any action is loading
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Add Category
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => setIsManageCategoriesModalOpen(true)} // Open manage categories modal
+              className="flex-grow"
+              disabled={isActionLoading}
+            >
+              Manage Categories
+            </Button>
+          </div>
         )}
       </div>
 
@@ -619,38 +630,73 @@ http://example.com/stream3
 
       {/* Update Selected Links Modal */}
       <Dialog open={isUpdateModalOpen} onOpenChange={setIsUpdateModalOpen}>
-        <DialogContent className="sm:max-w-[625px]">
-            <DialogHeader>
-                <DialogTitle>Update {selectedLinks.length} Selected Link(s)</DialogTitle>
-            </DialogHeader>
-            <div className="py-4 space-y-4">
-                <p className="text-sm text-muted-foreground">
-                  Paste M3U content below. The system will extract URLs (lines not starting with '#')
-                  and update the 'Original URL' for the selected links in their current displayed order.
-                  Ensure the number of valid URL lines matches the {selectedLinks.length} selected link(s).
-                  The name and other M3U tags will be ignored.
-                </p>
-                 <Textarea
-                    id="m3uContent"
-                    value={m3uContent}
-                    onChange={(e) => setM3uContent(e.target.value)}
-                    className="min-h-[200px] text-xs font-mono"
-                    placeholder={m3uPlaceholder}
-                    aria-label="M3U content for updating links"
-                />
-            </div>
-            <DialogFooter>
-                <DialogClose asChild>
-                    <Button variant="outline" disabled={isActionLoading}>Cancel</Button>
-                </DialogClose>
-                <Button
-                    onClick={handleUpdateSelected}
-                    disabled={isActionLoading || !m3uContent.trim()}
-                >
-                    {isActionLoading ? <Loader2 className="h-4 w-4 mr-2 animate-spin"/> : null}
-                    Update Links
-                </Button>
-            </DialogFooter>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Update Selected Links</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <p className="text-sm text-muted-foreground">
+              Paste M3U content to update the URLs for the {selectedLinks.length} selected links.
+              Ensure the number of URLs in your M3U content matches the number of selected links.
+            </p>
+            <Textarea
+              placeholder={m3uPlaceholder}
+              value={m3uContent}
+              onChange={(e) => setM3uContent(e.target.value)}
+              rows={10}
+              className="font-mono text-xs"
+            />
+          </div>
+          <DialogFooter className="sm:justify-start">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={handleUpdateSelected}
+              disabled={isActionLoading || !m3uContent.trim()}
+            >
+              {isActionLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Update Links
+            </Button>
+            <DialogClose asChild>
+              <Button type="button" variant="ghost" disabled={isActionLoading}>Cancel</Button>
+            </DialogClose>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Manage Categories Modal */}
+      <Dialog open={isManageCategoriesModalOpen} onOpenChange={setIsManageCategoriesModalOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Manage Categories</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            {categories.length === 0 ? (
+              <p className="text-muted-foreground">No categories available.</p>
+            ) : (
+              <ul className="space-y-2">
+                {categories.filter(cat => cat !== 'uncategorized').map(category => ( // Exclude 'uncategorized'
+                  <li key={category} className="flex items-center justify-between p-2 border rounded-md">
+                    <span className="font-medium">{category}</span>
+                    <Button
+                      variant="destructive"
+                      size="icon"
+                      onClick={() => deleteCategory(category)} // Call the existing deleteCategory function
+                      disabled={isActionLoading}
+                      title={`Delete category ${category}`}
+                    >
+                      {isActionLoading ? <Loader2 className="h-4 w-4 animate-spin"/> : <Trash2 className="h-4 w-4" />}
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button type="button" variant="secondary" disabled={isActionLoading}>Close</Button>
+            </DialogClose>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
