@@ -13,7 +13,7 @@ interface Link {
 }
 
 // Function to get a specific link from Firebase
-async function getLinkById(id: number): Promise<Link | null> {
+async function getLinkById(id: number, category: string): Promise<Link | null> {
   try {
     // Assuming links are stored as an array at the /links path
     const linksRef = ref(database, 'links');
@@ -27,8 +27,8 @@ async function getLinkById(id: number): Promise<Link | null> {
         ? snapshot.val() 
         : Object.values(snapshot.val() || {}); // Handle array or object
 
-    // Find the link by ID
-    const linkData = linksArray.find(link => link && link.id === id);
+    // Find the link by ID and category (case-insensitive for category)
+    const linkData = linksArray.find(link => link && link.id === id && link.category.toLowerCase() === category.toLowerCase());
 
     if (linkData) {
         // Basic validation
@@ -67,8 +67,8 @@ export async function GET(
       return NextResponse.json({ error: 'Invalid ID format' }, { status: 400 });
     }
 
-    // Fetch the specific link from Firebase
-    const link = await getLinkById(linkId);
+    // Fetch the specific link from Firebase, passing both ID and category
+    const link = await getLinkById(linkId, category);
 
     if (!link) {
       return NextResponse.json(
