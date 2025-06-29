@@ -32,7 +32,10 @@ async function getLinks(): Promise<Link[]> {
       typeof link.converted === 'string' &&
       typeof link.category === 'string' &&
       typeof link.createdAt === 'string'
-  );
+  ).map(link => ({ // Add .map here to normalize category
+      ...link,
+      category: link.category.toLowerCase() // Normalize category to lowercase
+  }));
   return validatedLinks;
 }
 
@@ -195,11 +198,12 @@ export async function DELETE(request: Request) {
     );
 
     // Recalculate categories from remaining links
-    const remainingCategories = Array.from(new Set(updatedLinks.map(link => link.category).filter(c => c !== 'Uncategorized')));
+    // const remainingCategories = Array.from(new Set(updatedLinks.map(link => link.category).filter(c => c !== 'uncategorized')));
 
-    // Save updated links and categories
+    // Save updated links
     await saveLinks(updatedLinks);
-    await saveCategories(remainingCategories);
+    // Removed automatic saving of categories here
+    // await saveCategories(remainingCategories);
 
     return NextResponse.json({
       message: `Deleted ${originalLength - updatedLinks.length} links`,
