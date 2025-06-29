@@ -1,39 +1,45 @@
 import { NextResponse } from 'next/server'
-import fs from 'fs'
-import path from 'path'
+import { database } from '@/lib/firebase'
+import { ref, get, set } from 'firebase/database'
 
-const dataDir = path.join(process.cwd(), 'data')
-const linksFile = path.join(dataDir, 'links.json')
-
+// Link interface (should be consistent across all API routes)
 interface Link {
-  id: number
-  original: string
-  converted: string
-  category: string
-  createdAt: string
+  id: number;
+  name: string;
+  original: string;
+  converted: string;
+  category: string;
+  createdAt: string;
 }
 
-interface LinksData {
-  links: Link[]
-  categories: string[]
-}
-
-function readLinks(): LinksData {
-  try {
-    const data = fs.readFileSync(linksFile, 'utf-8')
-    return JSON.parse(data)
-  } catch (error) {
-    console.error('Error reading links file:', error)
-    return { links: [], categories: [] }
+// Re-use getLinks function from app/api/links/route.ts
+async function getLinks(): Promise<Link[]> {
+  const linksRef = ref(database, 'links');
+  const snapshot = await get(linksRef);
+  if (!snapshot.exists()) {
+    return [];
   }
+  const rawLinks: any[] = Array.isArray(snapshot.val()) ? snapshot.val() : Object.values(snapshot.val());
+  const validatedLinks = rawLinks.filter((link: any): link is Link =>
+      link &&
+      typeof link.id === 'number' &&
+      typeof link.name === 'string' &&
+      typeof link.original === 'string' &&
+      typeof link.converted === 'string' &&
+      typeof link.category === 'string' &&
+      typeof link.createdAt === 'string'
+  );
+  return validatedLinks;
 }
 
-function writeLinks(data: LinksData) {
+// Re-use saveLinks function from app/api/links/route.ts
+async function saveLinks(links: Link[]) {
   try {
-    fs.writeFileSync(linksFile, JSON.stringify(data, null, 2))
+    const linksRef = ref(database, 'links');
+    await set(linksRef, links);
   } catch (error) {
-    console.error('Error writing links file:', error)
-    throw error
+    console.error('Error writing links to Firebase:', error);
+    throw new Error('Failed to save links data to Firebase');
   }
 }
 
@@ -42,41 +48,49 @@ export async function PATCH(
   { params }: { params: { id: string } }
 ) {
   try {
-    const linkId = parseInt(params.id)
-    const { category } = await request.json()
+    const linkId = parseInt(params.id);
+    // Expect originalCategory and newCategory from the request body
+    const { originalCategory, newCategory } = await request.json();
 
-    if (!category || typeof category !== 'string') {
+    if (isNaN(linkId) || !originalCategory || typeof originalCategory !== 'string' || !newCategory || typeof newCategory !== 'string') {
       return NextResponse.json(
-        { error: 'Category is required' },
+        { error: 'Invalid ID, originalCategory, or newCategory provided' },
         { status: 400 }
-      )
+      );
     }
 
-    const data = readLinks()
-    const linkIndex = data.links.findIndex(link => link.id === linkId)
+    const currentLinks = await getLinks(); // Fetch all links from Firebase
+
+    // Find the link by both id and its original category
+    const linkIndex = currentLinks.findIndex(link => link.id === linkId && link.category === originalCategory);
 
     if (linkIndex === -1) {
       return NextResponse.json(
-        { error: 'Link not found' },
+        { error: 'Link not found with the provided ID and category' },
         { status: 404 }
-      )
+      );
     }
 
-    // Update the link's category
-    data.links[linkIndex] = {
-      ...data.links[linkIndex],
-      category
-    }
+    // Create an updated link object
+    const updatedLink = {
+      ...currentLinks[linkIndex],
+      category: newCategory,
+      // If the converted URL needs to change due to category change, update it here
+      converted: `/api/stream/${newCategory.toLowerCase()}/${linkId}`
+    };
 
-    writeLinks(data)
+    // Replace the old link with the updated link
+    currentLinks[linkIndex] = updatedLink;
 
-    return NextResponse.json(data.links[linkIndex])
+    await saveLinks(currentLinks); // Save all updated links back to Firebase
+
+    return NextResponse.json(updatedLink);
   } catch (error) {
-    console.error('Error updating link:', error)
+    console.error('Error updating link:', error);
     return NextResponse.json(
       { error: 'Failed to update link' },
       { status: 500 }
-    )
+    );
   }
 }
 
@@ -85,27 +99,15 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
-    const linkId = parseInt(params.id)
-    const data = readLinks()
-    const linkIndex = data.links.findIndex(link => link.id === linkId)
-
-    if (linkIndex === -1) {
-      return NextResponse.json(
-        { error: 'Link not found' },
-        { status: 404 }
-      )
-    }
-
-    // Remove the link
-    data.links.splice(linkIndex, 1)
-    writeLinks(data)
-
-    return NextResponse.json({ success: true })
+    // This endpoint is effectively deprecated for single link deletion by ID alone
+    // as IDs are no longer globally unique. The plural /api/links DELETE handles
+    // category-aware deletion from the frontend.
+    return NextResponse.json({ error: 'This endpoint is not implemented for category-aware single link deletion.' }, { status: 405 });
   } catch (error) {
-    console.error('Error deleting link:', error)
+    console.error('Error deleting link:', error);
     return NextResponse.json(
       { error: 'Failed to delete link' },
       { status: 500 }
-    )
+    );
   }
 } 

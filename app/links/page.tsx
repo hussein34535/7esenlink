@@ -74,9 +74,14 @@ export default function LinksPage() {
         throw new Error(errorData.details || errorData.error || 'Failed to load links data')
       }
       const data: LinksData = await response.json()
-      setLinks(data.links || [])
+      // Normalize category to lowercase when loading links
+      const normalizedLinks = (data.links || []).map(link => ({
+        ...link,
+        category: link.category.toLowerCase()
+      }));
+      setLinks(normalizedLinks);
       // Ensure 'Uncategorized' is always an option if needed, or rely on backend data
-      const uniqueCategories = Array.from(new Set(['Uncategorized', ...(data.categories || [])]))
+      const uniqueCategories = Array.from(new Set(['uncategorized', ...(data.categories || []).map(cat => cat.toLowerCase())])) // Also normalize categories list
       // Filter out empty or null category names potentially coming from DB
       setCategories(uniqueCategories.filter(cat => cat && cat.trim() !== ''));
     } catch (err) {
@@ -160,13 +165,15 @@ export default function LinksPage() {
   }
 
 
-  const updateLinkCategory = async (linkId: number, newCategory: string) => {
+  const updateLinkCategory = async (linkId: number, originalCategory: string, newCategory: string) => {
     setIsActionLoading(true);
     const originalLinks = [...links];
     // Optimistic update
     setLinks(prevLinks =>
         prevLinks.map(link =>
-            link.id === linkId ? { ...link, category: newCategory } : link
+            link.id === linkId && link.category === originalCategory // Match by both ID and original category
+              ? { ...link, category: newCategory, converted: `/api/stream/${newCategory.toLowerCase()}/${link.id}` } // Update converted URL
+              : link
         )
     );
 
@@ -176,7 +183,7 @@ export default function LinksPage() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ category: newCategory }),
+        body: JSON.stringify({ originalCategory, newCategory }), // Pass originalCategory and newCategory
       })
 
       if (!response.ok) {
@@ -520,8 +527,8 @@ http://example.com/stream3
                                 {link.name || "Unnamed Link"}
                                </span>
                                <Select 
-                                 value={link.category || 'Uncategorized'} 
-                                 onValueChange={(newCategory) => updateLinkCategory(link.id, newCategory)}
+                                 value={link.category} 
+                                 onValueChange={(newCategory) => updateLinkCategory(link.id, link.category, newCategory)}
                                  disabled={isActionLoading}
                                >
                                  <SelectTrigger className="w-full h-8 text-xs mt-1">

@@ -27,7 +27,7 @@ async function getLinksFromFirebase(): Promise<Link[]> {
             ? linksData.filter(link => link !== null) // Filter out potential nulls if stored as sparse array
             : Object.values(linksData || {});
 
-        // Basic validation for each link (optional but recommended)
+        // Basic validation for each link (optional but recommended) and normalize category to lowercase
         return linksArray.filter(link =>
             link &&
             typeof link.id === 'number' &&
@@ -36,7 +36,10 @@ async function getLinksFromFirebase(): Promise<Link[]> {
             typeof link.converted === 'string' &&
             typeof link.category === 'string' &&
             typeof link.createdAt === 'string'
-        );
+        ).map(link => ({
+            ...link,
+            category: link.category.toLowerCase() // Normalize category to lowercase here
+        }));
     } catch (error) {
         console.error(`Error reading links from Firebase:`, error);
         // Depending on requirements, you might want to throw the error
@@ -78,43 +81,49 @@ function parseM3UUrls(content: string): string[] {
 
 export async function POST(request: NextRequest) {
   try {
-    const { linkIds, m3uContent } = await request.json()
+    const { linkIds: compositeLinkIds, m3uContent } = await request.json(); // Renamed linkIds to compositeLinkIds
 
-    if (!Array.isArray(linkIds) || linkIds.length === 0) {
-      return NextResponse.json({ error: 'No links selected' }, { status: 400 })
+    if (!Array.isArray(compositeLinkIds) || compositeLinkIds.length === 0) {
+      return NextResponse.json({ error: 'No links selected' }, { status: 400 });
     }
+
+    // Parse composite link IDs into an array of { id: number, category: string }
+    const parsedLinkIds = compositeLinkIds.map((compositeId: string) => {
+      const [categoryStr, idStr] = compositeId.split('-');
+      return { id: parseInt(idStr), category: categoryStr };
+    });
 
     if (!m3uContent) {
-      return NextResponse.json({ error: 'No M3U content provided' }, { status: 400 })
+      return NextResponse.json({ error: 'No M3U content provided' }, { status: 400 });
     }
 
-    const urls = parseM3UUrls(m3uContent)
+    const urls = parseM3UUrls(m3uContent);
     if (urls.length === 0) {
-      return NextResponse.json({ error: 'No valid URLs found in M3U content' }, { status: 400 })
+      return NextResponse.json({ error: 'No valid URLs found in M3U content' }, { status: 400 });
     }
 
-    if (urls.length !== linkIds.length) {
+    if (urls.length !== parsedLinkIds.length) {
       return NextResponse.json({
         error: 'Number of URLs in M3U content does not match number of selected links',
         details: {
-          selectedLinks: linkIds.length,
+          selectedLinks: parsedLinkIds.length,
           urlsFound: urls.length
         }
-      }, { status: 400 })
+      }, { status: 400 });
     }
 
     // Read existing links from Firebase
     const existingLinks = await getLinksFromFirebase();
 
-    // Create a map for faster lookup
-    const linksMap = new Map<number, Link>(existingLinks.map(link => [link.id, link]));
-
     // Update each selected link with the corresponding URL
     let updatedCount = 0;
     const updatedLinks = [...existingLinks]; // Create a mutable copy
 
-    linkIds.forEach((linkId, index) => {
-      const linkIndex = updatedLinks.findIndex(l => l.id === linkId);
+    parsedLinkIds.forEach((parsedId, index) => {
+      const linkIndex = updatedLinks.findIndex(
+        l => l.id === parsedId.id && l.category === parsedId.category
+      );
+
       if (linkIndex !== -1) {
         updatedLinks[linkIndex] = {
             ...updatedLinks[linkIndex],
@@ -122,13 +131,13 @@ export async function POST(request: NextRequest) {
         };
         updatedCount++;
       } else {
-          console.warn(`Link with ID ${linkId} not found in Firebase data.`);
+          console.warn(`Link with ID ${parsedId.id} and category ${parsedId.category} not found in Firebase data.`);
       }
     });
 
     if (updatedCount === 0) {
-      // This could happen if the selected IDs don't exist in Firebase anymore
-      return NextResponse.json({ error: 'No matching links found to update' }, { status: 404 })
+      // This could happen if the selected IDs/categories don't exist in Firebase anymore
+      return NextResponse.json({ error: 'No matching links found to update' }, { status: 404 });
     }
 
     // Write the updated list back to Firebase

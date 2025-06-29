@@ -147,7 +147,7 @@ export async function POST(request: Request) {
       name,
       original,
       converted: convertedUrl,
-      category: linkCategory,
+      category: linkCategory.toLowerCase(),
       createdAt: new Date().toISOString()
     }
 

@@ -164,7 +164,7 @@ export async function POST(request: NextRequest) {
         name: channel.name,
         original: channel.url,
         converted: `/api/stream/${category.toLowerCase()}/${currentMaxId}`,
-        category: category,
+        category: category.toLowerCase(),
         createdAt: new Date().toISOString(),
       };
     });
