@@ -1,0 +1,87 @@
+{
+  "links": [
+    {
+      "id": 1,
+      "name": "beIN SPORTS 1 4K",
+      "original": "http://173.212.193.243:8080/live/EGJct7UyMD/l97PbPoFVd/879.ts",
+      "converted": "/api/stream/beinfhd/1",
+      "category": "beinFHD",
+      "createdAt": "2025-04-07T00:00:21.909Z"
+    },
+    {
+      "id": 2,
+      "name": "beIN SPORTS 2 4K",
+      "original": "http://cyberfamily.sytes.net:25461/live/cyber4k/xtreamtv/4.m3u8",
+      "converted": "/api/stream/beinfhd/2",
+      "category": "beinFHD",
+      "createdAt": "2025-04-07T00:00:21.909Z"
+    },
+    {
+      "id": 3,
+      "name": "beIN SPORTS 3 4K",
+      "original": "http://cyberfamily.sytes.net:25461/live/cyber4k/xtreamtv/5.m3u8",
+      "converted": "/api/stream/beinfhd/3",
+      "category": "beinFHD",
+      "createdAt": "2025-04-07T00:00:21.909Z"
+    },
+    {
+      "id": 4,
+      "name": "beIN SPORTS 4 4K",
+      "original": "http://cyberfamily.sytes.net:25461/live/cyber4k/xtreamtv/6.m3u8",
+      "converted": "/api/stream/beinfhd/4",
+      "category": "beinFHD",
+      "createdAt": "2025-04-07T00:00:21.909Z"
+    },
+    {
+      "id": 5,
+      "name": "beIN SPORTS 5 4K",
+      "original": "http://cyberfamily.sytes.net:25461/live/cyber4k/xtreamtv/7.m3u8",
+      "converted": "/api/stream/beinfhd/5",
+      "category": "beinFHD",
+      "createdAt": "2025-04-07T00:00:21.909Z"
+    },
+    {
+      "id": 6,
+      "name": "beIN SPORTS 6 4K",
+      "original": "http://cyberfamily.sytes.net:25461/live/cyber4k/xtreamtv/8.m3u8",
+      "converted": "/api/stream/beinfhd/6",
+      "category": "beinFHD",
+      "createdAt": "2025-04-07T00:00:21.909Z"
+    },
+    {
+      "id": 7,
+      "name": "beIN SPORTS 7 4K",
+      "original": "http://cyberfamily.sytes.net:25461/live/cyber4k/xtreamtv/9.m3u8",
+      "converted": "/api/stream/beinfhd/7",
+      "category": "beinFHD",
+      "createdAt": "2025-04-07T00:00:21.909Z"
+    },
+    {
+      "id": 8,
+      "name": "beIN SPORTS 8 4K",
+      "original": "http://cyberfamily.sytes.net:25461/live/cyber4k/xtreamtv/10.m3u8",
+      "converted": "/api/stream/beinfhd/8",
+      "category": "beinFHD",
+      "createdAt": "2025-04-07T00:00:21.909Z"
+    },
+    {
+      "id": 9,
+      "name": "beIN SPORTS 9 4K",
+      "original": "http://cyberfamily.sytes.net:25461/live/cyber4k/xtreamtv/11.m3u8",
+      "converted": "/api/stream/beinfhd/9",
+      "category": "beinFHD",
+      "createdAt": "2025-04-07T00:00:21.909Z"
+    },
+    {
+      "id": 10,
+      "name": "sdgsdg",
+      "original": "https://vo-live.cdb.cdn.orange.com/Content/Channel/AbuDhabiSportsChannel1/HLS/index.m3u8",
+      "converted": "/api/stream/beinfhd/10",
+      "category": "beinFHD",
+      "createdAt": "2025-04-07T01:38:22.063Z"
+    }
+  ],
+  "categories": [
+    "beinFHD"
+  ]
+}
