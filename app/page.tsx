@@ -487,7 +487,10 @@ http://example.com/stream3
             <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
                 <h1 className="text-3xl font-bold tracking-tight">Converted Links</h1>
                 <div className="flex gap-2">
-                    {/* Save button removed to match HTML request 100% */}
+                    <Button onClick={() => setIsUpdateModalOpen(true)} disabled={isActionLoading}>
+                        <Save className="h-4 w-4 mr-2" />
+                        Update Selected
+                    </Button>
                     <Link href="/import">
                         <Button variant="outline">Import New Links</Button>
                     </Link>
@@ -522,18 +525,6 @@ http://example.com/stream3
 
                 {/* Actions Group */}
                 <div className="flex gap-2 w-full md:w-auto">
-                    {selectedLinks.length > 0 && (
-                        <>
-                            <Button onClick={() => setIsUpdateModalOpen(true)} disabled={isActionLoading}>
-                                <Save className="h-4 w-4 mr-2" />
-                                Update ({selectedLinks.length})
-                            </Button>
-                            <Button variant="destructive" onClick={() => deleteLinks(selectedLinks)} disabled={isActionLoading}>
-                                <Trash2 className="h-4 w-4 mr-2" />
-                                Delete ({selectedLinks.length})
-                            </Button>
-                        </>
-                    )}
                     {/* Add Category */}
                     {!showNewCategoryInput ? (
                         <Button variant="outline" onClick={() => setShowNewCategoryInput(true)} className="bg-background flex-grow">
