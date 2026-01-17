@@ -43,11 +43,10 @@ export default function RootLayout({
                   <Link
                     key={item.name}
                     href={item.href}
-                    className={`flex items-center px-4 py-2 text-sm font-medium rounded-md ${
-                      pathname === item.href
+                    className={`flex items-center px-4 py-2 text-sm font-medium rounded-md ${pathname === item.href
                         ? 'bg-blue-50 text-blue-700'
                         : 'text-gray-700 hover:bg-gray-50'
-                    }`}
+                      }`}
                   >
                     <span className="mr-3 text-lg">{item.icon}</span>
                     {item.name}

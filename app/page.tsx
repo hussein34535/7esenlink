@@ -42,7 +42,7 @@ interface LinksData {
   categories: string[]
 }
 
-export default function Home() {
+export default function LinksPage() {
   const [links, setLinks] = useState<ConvertedLink[]>([])
   const [categories, setCategories] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
@@ -460,8 +460,8 @@ http://example.com/stream3
     <div className="container mx-auto py-8 px-4 md:px-6 space-y-8">
       <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
         <h1 className="text-3xl font-bold tracking-tight">Converted Links</h1>
-        <Link href="/import">
-          <Button variant="outline">Import New Links</Button>
+        <Link href="/">
+          <Button variant="outline">Back to Add Links</Button>
         </Link>
       </div>
 
