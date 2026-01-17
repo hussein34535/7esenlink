@@ -136,8 +136,12 @@ export async function POST(request: Request) {
     // Return success and the added/existing category
     return NextResponse.json({ success: true, category: trimmedCategory })
   } catch (error) {
-  }, { status: 500 })
-}
+    console.error('Error in POST /api/links/categories:', error)
+    return NextResponse.json({
+      error: 'Failed to create category',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    }, { status: 500 })
+  }
 }
 
 export async function PUT(request: Request) {

@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { Inter } from 'next/font/google'
 import { useState } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
+import { Toaster } from "@/components/ui/sonner"
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -17,8 +18,8 @@ export default function RootLayout({
   const [isSidebarOpen, setIsSidebarOpen] = useState(true)
 
   const navigation = [
-    { name: 'Import', href: '/', icon: '📥' },
-    { name: 'Links', href: '/links', icon: '📋' },
+    { name: 'Links', href: '/', icon: '📋' },
+    { name: 'Import', href: '/import', icon: '📥' },
   ]
 
   return (
@@ -84,6 +85,7 @@ export default function RootLayout({
             </main>
           </div>
         </div>
+        <Toaster />
       </body>
     </html>
   )
