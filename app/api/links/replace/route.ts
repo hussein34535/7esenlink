@@ -11,84 +11,92 @@ interface Link {
     createdAt: string
 }
 
-async function getLinks(): Promise<Link[]> {
-    const linksRef = ref(database, 'links');
-    const snapshot = await get(linksRef);
-    if (!snapshot.exists()) {
-        return [];
-    }
-    const rawLinks: any[] = Array.isArray(snapshot.val()) ? snapshot.val() : Object.values(snapshot.val());
-    const validatedLinks = rawLinks.filter((link: any): link is Link =>
-        link &&
-        typeof link.id === 'number' &&
-        typeof link.name === 'string' &&
-        typeof link.original === 'string' &&
-        typeof link.converted === 'string' &&
-        typeof link.category === 'string' &&
-        typeof link.createdAt === 'string'
-    ).map(link => ({
-        ...link,
-        category: link.category.toLowerCase()
-    }));
-    return validatedLinks;
-}
-
-async function saveLinks(links: Link[]) {
-    try {
-        const linksRef = ref(database, 'links');
-        await set(linksRef, links);
-        console.log('Links saved successfully');
-    } catch (error) {
-        console.error('Error writing links to Firebase:', error);
-        throw new Error('Failed to save links data to Firebase');
-    }
-}
-
 export async function POST(request: Request) {
     try {
-        const { searchText, replaceText } = await request.json()
+        const { findText, replaceText, category } = await request.json()
 
-        if (!searchText) {
-            return NextResponse.json({ error: 'Search text is required' }, { status: 400 })
+        if (!findText) {
+            return NextResponse.json(
+                { error: 'Find text is required' },
+                { status: 400 }
+            )
         }
 
-        if (replaceText === undefined) {
-            return NextResponse.json({ error: 'Replace text is required' }, { status: 400 })
+        // fetch all links
+        const linksRef = ref(database, 'links')
+        const snapshot = await get(linksRef)
+
+        if (!snapshot.exists()) {
+            return NextResponse.json({ message: 'No links found to update' })
         }
 
-        // Get current links
-        const currentLinks = await getLinks();
+        const rawLinks: any[] = Array.isArray(snapshot.val())
+            ? snapshot.val()
+            : Object.values(snapshot.val())
 
-        let replacedCount = 0;
+        let updatedCount = 0
 
-        // Replace text in all original URLs
-        const updatedLinks = currentLinks.map(link => {
-            if (link.original.includes(searchText)) {
-                replacedCount++;
+        const updatedLinks = rawLinks.map((link: any) => {
+            // Check if it's a valid link object
+            if (
+                !link ||
+                typeof link.name !== 'string' ||
+                typeof link.original !== 'string'
+            ) {
+                return link
+            }
+
+            // Category Filter Check
+            if (category && category !== 'all' && link.category.toLowerCase() !== category.toLowerCase()) {
+                return link; // Skip if category provided but doesn't match
+            }
+
+            let hasChanges = false
+            let newName = link.name
+            let newOriginal = link.original
+
+            // detailed logging could go here
+
+            // Perform replacement in Name
+            if (newName.includes(findText)) {
+                newName = newName.replaceAll(findText, replaceText || '')
+                hasChanges = true
+            }
+
+            // Perform replacement in Original URL
+            if (newOriginal.includes(findText)) {
+                newOriginal = newOriginal.replaceAll(findText, replaceText || '')
+                hasChanges = true
+            }
+
+            if (hasChanges) {
+                updatedCount++
                 return {
                     ...link,
-                    original: link.original.replaceAll(searchText, replaceText)
-                };
+                    name: newName,
+                    original: newOriginal,
+                }
             }
-            return link;
-        });
 
-        if (replacedCount === 0) {
-            return NextResponse.json({
-                message: 'No links were updated - search text not found in any URLs',
-                replacedCount: 0
-            });
+            return link
+        })
+
+        if (updatedCount > 0) {
+            // Save back to Firebase
+            // Preserving the structure as array
+            await set(linksRef, updatedLinks)
         }
 
-        // Save updated links
-        await saveLinks(updatedLinks);
-
         return NextResponse.json({
-            message: `Successfully replaced "${searchText}" with "${replaceText}" in ${replacedCount} link(s)`,
-            replacedCount
-        });
+            message: `Updated ${updatedCount} links successfully`,
+            updatedCount
+        })
+
     } catch (error) {
-        console.error('Error in POST /api/links/replace:', error)
-        return NextResponse.json({ error: 'Failed to replace text in links' }, { status: 500 })
+        console.error('Error replacing link text:', error)
+        return NextResponse.json(
+            { error: 'Failed to replace link text' },
+            { status: 500 }
+        )
     }
 }

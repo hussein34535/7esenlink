@@ -1,127 +1,57 @@
 import { NextResponse } from 'next/server'
 import { database } from '@/lib/firebase'
-import { ref, get, set } from 'firebase/database'
-
-// Link interface (should be consistent across all API routes)
-interface Link {
-  id: number;
-  name: string;
-  original: string;
-  converted: string;
-  category: string;
-  createdAt: string;
-}
-
-// Re-use getLinks function from app/api/links/route.ts
-async function getLinks(): Promise<Link[]> {
-  const linksRef = ref(database, 'links');
-  const snapshot = await get(linksRef);
-  if (!snapshot.exists()) {
-    return [];
-  }
-  const rawLinks: any[] = Array.isArray(snapshot.val()) ? snapshot.val() : Object.values(snapshot.val());
-  const validatedLinks = rawLinks.filter((link: any): link is Link =>
-    link &&
-    typeof link.id === 'number' &&
-    typeof link.name === 'string' &&
-    typeof link.original === 'string' &&
-    typeof link.converted === 'string' &&
-    typeof link.category === 'string' &&
-    typeof link.createdAt === 'string'
-  );
-  return validatedLinks;
-}
-
-// Re-use saveLinks function from app/api/links/route.ts
-async function saveLinks(links: Link[]) {
-  try {
-    const linksRef = ref(database, 'links');
-    await set(linksRef, links);
-  } catch (error) {
-    console.error('Error writing links to Firebase:', error);
-    throw new Error('Failed to save links data to Firebase');
-  }
-}
+import { ref, get, update } from 'firebase/database'
 
 export async function PATCH(
   request: Request,
   { params }: { params: { id: string } }
 ) {
   try {
-    const linkId = parseInt(params.id);
-    const body = await request.json();
-    const { originalCategory, newCategory, newName } = body;
+    const id = params.id
+    const { name, category, originalCategory, newCategory } = await request.json()
 
-    if (isNaN(linkId)) {
-      return NextResponse.json(
-        { error: 'Invalid ID provided' },
-        { status: 400 }
-      );
+    // If updating category (moving logic), reuse existing logic or improve it
+    // The existing code for moving categories was likely in a different route or handled differently.
+    // The UI now sends PATCH to /api/links/[id] for name updates too.
+
+    const linksRef = ref(database, 'links')
+    const snapshot = await get(linksRef)
+
+    if (!snapshot.exists()) {
+      return NextResponse.json({ error: 'Link not found' }, { status: 404 })
     }
 
-    // Require originalCategory for finding the link
-    if (!originalCategory || typeof originalCategory !== 'string') {
-      return NextResponse.json(
-        { error: 'originalCategory is required' },
-        { status: 400 }
-      );
-    }
-
-    const currentLinks = await getLinks();
-
-    // Find the link by both id and its original category
-    const linkIndex = currentLinks.findIndex(link => link.id === linkId && link.category === originalCategory);
+    const links = snapshot.val() as any[]
+    const linkIndex = links.findIndex((l: any) => l.id === parseInt(id))
 
     if (linkIndex === -1) {
-      return NextResponse.json(
-        { error: 'Link not found with the provided ID and category' },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: 'Link not found' }, { status: 404 })
     }
 
-    // Create an updated link object
-    const updatedLink = { ...currentLinks[linkIndex] };
+    const linkToUpdate = links[linkIndex]
+    const updates: any = {}
 
-    // Update name if provided
-    if (newName && typeof newName === 'string') {
-      updatedLink.name = newName;
+    if (name !== undefined) {
+      updates[`links/${linkIndex}/name`] = name
     }
 
-    // Update category if provided
-    if (newCategory && typeof newCategory === 'string') {
-      updatedLink.category = newCategory;
-      updatedLink.converted = `/api/stream/${newCategory.toLowerCase()}/${linkId}`;
+    if (category !== undefined) {
+      updates[`links/${linkIndex}/category`] = category.toLowerCase()
+      // Also verify if we need to update 'converted' URL to reflect new category if that was the logic
+      // The original code in page.tsx client-side updated it: `/api/stream/${newCategory.toLowerCase()}/${link.id}`
+      // We should update it here too for consistency if we want backend to be authoritative, 
+      // BUT the client-side optimistic update did it. Let's do it here too.
+      updates[`links/${linkIndex}/converted`] = `/api/stream/${category.toLowerCase()}/${linkToUpdate.id}`
     }
 
-    // Replace the old link with the updated link
-    currentLinks[linkIndex] = updatedLink;
+    await update(ref(database), updates)
 
-    await saveLinks(currentLinks);
-
-    return NextResponse.json(updatedLink);
+    return NextResponse.json({ success: true })
   } catch (error) {
-    console.error('Error updating link:', error);
+    console.error('Error updating link:', error)
     return NextResponse.json(
       { error: 'Failed to update link' },
       { status: 500 }
-    );
+    )
   }
 }
-
-export async function DELETE(
-  request: Request,
-  { params }: { params: { id: string } }
-) {
-  try {
-    // This endpoint is effectively deprecated for single link deletion by ID alone
-    // as IDs are no longer globally unique. The plural /api/links DELETE handles
-    // category-aware deletion from the frontend.
-    return NextResponse.json({ error: 'This endpoint is not implemented for category-aware single link deletion.' }, { status: 405 });
-  } catch (error) {
-    console.error('Error deleting link:', error);
-    return NextResponse.json(
-      { error: 'Failed to delete link' },
-      { status: 500 }
-    );
-  }
-} 
