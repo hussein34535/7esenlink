@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-// Removed Badge import as it wasn't used after the change
 import { toast } from "sonner"
 import { Loader2, Search, Copy, Trash2, Plus, X, Edit2, ArrowUp, ArrowDown, Save, Pen, PlayCircle } from "lucide-react"
 import Link from "next/link"
@@ -76,15 +75,12 @@ export default function Home() {
                 throw new Error(errorData.details || errorData.error || 'Failed to load links data')
             }
             const data: LinksData = await response.json()
-            // Normalize category to lowercase when loading links
             const normalizedLinks = (data.links || []).map(link => ({
                 ...link,
                 category: link.category.toLowerCase()
             }));
             setLinks(normalizedLinks);
-            // Ensure 'Uncategorized' is always an option if needed, or rely on backend data
-            const uniqueCategories = Array.from(new Set(['uncategorized', ...(data.categories || []).map(cat => cat.toLowerCase())])) // Also normalize categories list
-            // Filter out empty or null category names potentially coming from DB
+            const uniqueCategories = Array.from(new Set(['uncategorized', ...(data.categories || []).map(cat => cat.toLowerCase())]))
             setCategories(uniqueCategories.filter(cat => cat && cat.trim() !== ''));
         } catch (err) {
             const message = err instanceof Error ? err.message : 'Failed to load links data';
@@ -115,12 +111,10 @@ export default function Home() {
                 throw new Error(errorData.details || errorData.error || 'Failed to create category')
             }
 
-            await loadLinksAndCategories() // Reload to get the updated list including the new one
-
+            await loadLinksAndCategories()
             setNewCategory('');
             setShowNewCategoryInput(false);
             toast.success(`Category '${newCategory.trim()}' created successfully`);
-
         } catch (err) {
             console.error('Error creating category:', err)
             toast.error(err instanceof Error ? err.message : 'Failed to create category')
@@ -129,7 +123,6 @@ export default function Home() {
         }
     }
 
-    // Delete Category function remains largely the same, ensure it updates state correctly
     const deleteCategory = async (category: string) => {
         if (!confirm(`Are you sure you want to delete the category "${category}"? Links in this category will be moved to "Uncategorized".`)) {
             return;
@@ -145,18 +138,10 @@ export default function Home() {
                 throw new Error(errorData.details || errorData.error || 'Failed to delete category')
             }
 
-            // Optimistic UI update or reload
-            await loadLinksAndCategories(); // Reloading is safer to ensure consistency
-            // Manually update state if preferred (faster perceived response)
-            // setCategories(categories.filter(c => c !== category))
-            // setLinks(links.map(link =>
-            //   link.category === category ? { ...link, category: 'Uncategorized' } : link
-            // ))
-            // If using manual update, ensure the filter dropdown is also updated
+            await loadLinksAndCategories();
             if (selectedCategoryFilter === category) {
-                setSelectedCategoryFilter('all'); // Reset filter if the deleted category was selected
+                setSelectedCategoryFilter('all');
             }
-
             toast.success(`Category "${category}" deleted successfully`);
         } catch (err) {
             console.error('Error deleting category:', err)
@@ -166,15 +151,13 @@ export default function Home() {
         }
     }
 
-
     const updateLinkCategory = async (linkId: number, originalCategory: string, newCategory: string) => {
         setIsActionLoading(true);
         const originalLinks = [...links];
-        // Optimistic update
         setLinks(prevLinks =>
             prevLinks.map(link =>
-                link.id === linkId && link.category === originalCategory // Match by both ID and original category
-                    ? { ...link, category: newCategory, converted: `/api/stream/${newCategory.toLowerCase()}/${link.id}` } // Update converted URL
+                link.id === linkId && link.category === originalCategory
+                    ? { ...link, category: newCategory, converted: `/api/stream/${newCategory.toLowerCase()}/${link.id}` }
                     : link
             )
         );
@@ -185,20 +168,17 @@ export default function Home() {
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ originalCategory, newCategory }), // Pass originalCategory and newCategory
+                body: JSON.stringify({ originalCategory, newCategory }),
             })
 
             if (!response.ok) {
-                const errorData = await response.json().catch(() => ({}));
-                throw new Error(errorData.details || errorData.error || 'Failed to update link category')
+                throw new Error('Failed to update link category')
             }
             toast.success('Link category updated successfully')
-            // Optional: reload data if backend logic might affect other things
-            // await loadLinksAndCategories();
         } catch (err) {
             console.error('Error updating category:', err);
             toast.error(err instanceof Error ? err.message : 'Failed to update link category')
-            setLinks(originalLinks); // Revert on error
+            setLinks(originalLinks);
         } finally {
             setIsActionLoading(false);
         }
@@ -227,12 +207,10 @@ export default function Home() {
         const originalLinks = [...links];
         const originalSelected = [...selectedLinks];
 
-        // Optimistic update
         setLinks(prevLinks => prevLinks.filter(link => !compositeKeys.includes(`${link.category}-${link.id}`)));
         setSelectedLinks(prevSelected => prevSelected.filter(key => !compositeKeys.includes(key)));
 
         try {
-            // Prepare the array of objects { id, category } for the backend
             const linksToDelete = compositeKeys.map(key => {
                 const [categoryStr, idStr] = key.split('-');
                 return { id: parseInt(idStr), category: categoryStr };
@@ -247,16 +225,13 @@ export default function Home() {
             })
 
             if (!response.ok) {
-                const error = await response.json().catch(() => ({}));
-                throw new Error(error.message || 'Failed to delete links')
+                throw new Error('Failed to delete links')
             }
 
             toast.success(`${compositeKeys.length} link(s) deleted successfully`)
-            // No need to update state again if optimistic update was successful
         } catch (err) {
             console.error('Error deleting links:', err);
             toast.error(err instanceof Error ? err.message : 'Failed to delete links')
-            // Revert on error
             setLinks(originalLinks);
             setSelectedLinks(originalSelected);
         } finally {
@@ -286,14 +261,12 @@ export default function Home() {
             return
         }
 
-        // Basic validation: Check if the number of lines (potential URLs) matches selected links
         const lines = m3uContent.trim().split('\n');
         const urlsInM3u = lines.filter(line => line.trim() && !line.trim().startsWith('#'));
         if (urlsInM3u.length !== selectedLinks.length) {
             toast.error(`Number of URLs in M3U content (${urlsInM3u.length}) does not match the number of selected links (${selectedLinks.length}).`);
             return;
         }
-
 
         setIsActionLoading(true)
         try {
@@ -304,20 +277,19 @@ export default function Home() {
                 },
                 body: JSON.stringify({
                     linkIds: selectedLinks,
-                    m3uContent // Send the raw M3U content
+                    m3uContent
                 }),
             })
 
             if (!response.ok) {
-                const error = await response.json().catch(() => ({ error: 'Failed to update links' }))
-                throw new Error(error.error || 'Failed to update links')
+                throw new Error('Failed to update links')
             }
 
             toast.success('Links updated successfully')
             setM3uContent('')
             setSelectedLinks([])
             setIsUpdateModalOpen(false)
-            await loadLinksAndCategories() // Refresh data to show updated URLs
+            await loadLinksAndCategories()
         } catch (error) {
             console.error('Error updating links:', error)
             toast.error(error instanceof Error ? error.message : 'Failed to update links')
@@ -342,33 +314,17 @@ export default function Home() {
     const isSomeSelected = selectedLinks.length > 0 && selectedLinks.length < filteredLinks.length;
     const selectAllCheckedState = isAllSelected ? true : (isSomeSelected ? 'indeterminate' : false);
 
-    // Define placeholder text outside JSX
-    const m3uPlaceholder = `#EXTM3U
-#EXTINF:-1 tvg-id="SomeChannel" tvg-name="Some Channel Name" group-title="News",Some Channel Name
-http://example.com/stream1
-#EXTINF:-1 tvg-id="AnotherID" tvg-name="Another Channel" group-title="Movies",Another Channel
-http://example.com/stream2
-#EXTINF:-1 tvg-id="ThirdID" tvg-name="Third Channel" group-title="Sports",Third Channel
-http://example.com/stream3
-...`;
-
-    // State for Find & Replace Bar
-    const [replaceCategory, setReplaceCategory] = useState("all")
+    // State for Find & Replace Bar (Inline)
     const [showFindReplace, setShowFindReplace] = useState(false)
     const [findText, setFindText] = useState("")
     const [replaceText, setReplaceText] = useState("")
 
-    const handleNameChange = (id: number, newName: string) => {
-        setLinks(prev => prev.map(l => l.id === id ? { ...l, name: newName } : l))
-    }
-
     const handleNameBlur = async (id: number, newName: string) => {
-        // Save on blur
         try {
             const response = await fetch(`/api/links/${id}`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name: newName }), // Assuming API supports patch name
+                body: JSON.stringify({ name: newName }),
             })
             if (!response.ok) throw new Error('Failed to update name')
             toast.success('Name updated')
@@ -377,16 +333,12 @@ http://example.com/stream3
         }
     }
 
-    // Reuse handleReplace but adapt for the bar
     const handleQuickReplace = async () => {
         if (!findText) {
             toast.error('Find text is required')
             return
         }
-
-        // Use the main toolbar category filter
         const targetCategory = selectedCategoryFilter;
-
         if (!confirm(`Replace "${findText}" with "${replaceText}" in ${targetCategory === 'all' ? 'ALL' : targetCategory} links?`)) {
             return;
         }
@@ -402,7 +354,6 @@ http://example.com/stream3
             })
 
             const data = await response.json()
-
             if (!response.ok) {
                 throw new Error(data.error || 'Failed to replace text')
             }
@@ -440,12 +391,7 @@ http://example.com/stream3
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ oldName, newName: editCategoryName })
             })
-
-            if (!response.ok) {
-                const data = await response.json()
-                throw new Error(data.error || 'Failed to rename')
-            }
-
+            if (!response.ok) throw new Error('Failed to rename')
             toast.success('Category renamed')
             setEditingCategory(null)
             await loadLinksAndCategories()
@@ -458,17 +404,13 @@ http://example.com/stream3
 
     const handleMoveCategory = async (index: number, direction: 'up' | 'down') => {
         if (isActionLoading) return
-
         const newIndex = direction === 'up' ? index - 1 : index + 1
         if (newIndex < 0 || newIndex >= categories.length) return
-
         const newCategories = [...categories]
         const temp = newCategories[index]
         newCategories[index] = newCategories[newIndex]
         newCategories[newIndex] = temp
-
-        setCategories(newCategories) // Optimistic update
-
+        setCategories(newCategories)
         try {
             const response = await fetch('/api/links/categories', {
                 method: 'PUT',
@@ -478,19 +420,24 @@ http://example.com/stream3
             if (!response.ok) throw new Error('Failed to save order')
         } catch (e) {
             toast.error('Failed to save order')
-            await loadLinksAndCategories() // Revert
+            await loadLinksAndCategories()
         }
     }
+
+    const m3uPlaceholder = `#EXTM3U
+#EXTINF:-1 tvg-id="SomeChannel" tvg-name="Some Channel Name" group-title="News",Some Channel Name
+http://example.com/stream1
+#EXTINF:-1 tvg-id="AnotherID" tvg-name="Another Channel" group-title="Movies",Another Channel
+http://example.com/stream2
+#EXTINF:-1 tvg-id="ThirdID" tvg-name="Third Channel" group-title="Sports",Third Channel
+http://example.com/stream3
+...`;
 
     return (
         <div className="container mx-auto py-8 px-4 md:px-6 space-y-6">
             <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
                 <h1 className="text-3xl font-bold tracking-tight">Converted Links</h1>
                 <div className="flex gap-2">
-                    <Button onClick={() => setIsUpdateModalOpen(true)} disabled={isActionLoading}>
-                        <Save className="h-4 w-4 mr-2" />
-                        Update Selected
-                    </Button>
                     <Link href="/import">
                         <Button variant="outline">Import New Links</Button>
                     </Link>
@@ -499,7 +446,6 @@ http://example.com/stream3
 
             {/* Toolbar Area */}
             <div className="flex flex-col md:flex-row items-center gap-4">
-                {/* Search */}
                 <div className="relative flex-grow w-full md:w-auto">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input
@@ -510,7 +456,6 @@ http://example.com/stream3
                     />
                 </div>
 
-                {/* Category Filter */}
                 <Select value={selectedCategoryFilter} onValueChange={setSelectedCategoryFilter}>
                     <SelectTrigger className="w-full md:w-[200px] bg-background">
                         <SelectValue placeholder="All Categories" />
@@ -523,9 +468,7 @@ http://example.com/stream3
                     </SelectContent>
                 </Select>
 
-                {/* Actions Group */}
                 <div className="flex gap-2 w-full md:w-auto">
-                    {/* Add Category */}
                     {!showNewCategoryInput ? (
                         <Button variant="outline" onClick={() => setShowNewCategoryInput(true)} className="bg-background flex-grow">
                             <Plus className="h-4 w-4 mr-2" />
@@ -586,7 +529,6 @@ http://example.com/stream3
                                 className="bg-background h-9"
                             />
                         </div>
-                        {/* Category selector removed as requested */}
                         <Button onClick={handleQuickReplace} disabled={isActionLoading || !findText} className="h-9 shrink-0">
                             {isActionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Replace All"}
                         </Button>
@@ -599,6 +541,48 @@ http://example.com/stream3
                 <Card className="border-destructive bg-destructive/10">
                     <CardContent className="pt-6">
                         <p className="text-destructive font-medium">Error: {error}</p>
+                    </CardContent>
+                </Card>
+            )}
+
+            {/* Selected Actions Bar - RESTORED FROM SNIPPET */}
+            {selectedLinks.length > 0 && (
+                <Card className="mb-6 border-primary/50 bg-primary/5">
+                    <CardContent className="p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+                        <div className="flex items-center gap-2">
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleSelectAll(false)}
+                                title="Clear selection"
+                                className="h-6 w-6"
+                                aria-label="Clear selection"
+                            >
+                                <X className="h-4 w-4" />
+                            </Button>
+                            <span className="text-sm font-medium text-primary">
+                                {selectedLinks.length} link{selectedLinks.length === 1 ? '' : 's'} selected
+                            </span>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setIsUpdateModalOpen(true)}
+                                disabled={isActionLoading}
+                            >
+                                Update Selected URLs
+                            </Button>
+                            <Button
+                                variant="destructive"
+                                size="sm"
+                                onClick={() => deleteLinks(selectedLinks)}
+                                disabled={isActionLoading}
+                            >
+                                {isActionLoading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Trash2 className="h-4 w-4 mr-2" />}
+                                Delete Selected
+                            </Button>
+                        </div>
                     </CardContent>
                 </Card>
             )}
@@ -742,13 +726,38 @@ http://example.com/stream3
                 </Card>
             )}
 
-            {/* Keep existing modals (Manage Categories, Update Selected) */}
+            {/* Modals */}
             <Dialog open={isUpdateModalOpen} onOpenChange={setIsUpdateModalOpen}>
                 <DialogContent className="sm:max-w-md">
-                    <DialogHeader><DialogTitle>Update Selected</DialogTitle></DialogHeader>
-                    <Textarea value={m3uContent} onChange={e => setM3uContent(e.target.value)} rows={5} placeholder="#EXTM3U..." />
-                    <DialogFooter>
-                        <Button onClick={handleUpdateSelected} disabled={isActionLoading}>Update</Button>
+                    <DialogHeader>
+                        <DialogTitle>Update Selected Links</DialogTitle>
+                    </DialogHeader>
+                    <div className="grid gap-4 py-4">
+                        <p className="text-sm text-muted-foreground">
+                            Paste M3U content to update the URLs for the {selectedLinks.length} selected links.
+                            Ensure the number of URLs in your M3U content matches the number of selected links.
+                        </p>
+                        <Textarea
+                            placeholder={m3uPlaceholder}
+                            value={m3uContent}
+                            onChange={(e) => setM3uContent(e.target.value)}
+                            rows={10}
+                            className="font-mono text-xs"
+                        />
+                    </div>
+                    <DialogFooter className="sm:justify-start">
+                        <Button
+                            type="button"
+                            variant="secondary"
+                            onClick={handleUpdateSelected}
+                            disabled={isActionLoading || !m3uContent.trim()}
+                        >
+                            {isActionLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                            Update Links
+                        </Button>
+                        <DialogClose asChild>
+                            <Button type="button" variant="ghost" disabled={isActionLoading}>Cancel</Button>
+                        </DialogClose>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
@@ -759,7 +768,6 @@ http://example.com/stream3
                         <DialogTitle>Manage Categories</DialogTitle>
                     </DialogHeader>
                     <div className="grid gap-4 py-4 max-h-[60vh] overflow-y-auto">
-                        {/* Simple list with delete for now, maybe add rename here later if needed */}
                         {categories.filter(c => c !== 'uncategorized').map((cat, index) => (
                             <div key={cat} className="flex flex-col gap-2 p-2 border rounded">
                                 {editingCategory === cat ? (
@@ -827,7 +835,6 @@ http://example.com/stream3
                     <p className="text-xs text-muted-foreground break-all">{playingUrl}</p>
                 </DialogContent>
             </Dialog>
-
         </div>
     )
 }
