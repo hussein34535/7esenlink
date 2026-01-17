@@ -616,7 +616,15 @@ http://example.com/stream3
                                         const isSelected = selectedLinks.includes(`${link.category}-${link.id}`);
 
                                         return (
-                                            <TableRow key={`${link.category}-${link.id}`} className={isSelected ? "bg-muted" : ""}>
+                                            <TableRow
+                                                key={`${link.category}-${link.id}`}
+                                                className={`cursor-pointer transition-colors hover:bg-muted/50 ${isSelected ? "bg-muted" : ""}`}
+                                                onClick={(e) => {
+                                                    // Prevent toggle if clicking interactive elements
+                                                    if ((e.target as HTMLElement).closest('button, input, a, [role="button"], [role="checkbox"]')) return;
+                                                    handleSelectLink(`${link.category}-${link.id}`, !isSelected);
+                                                }}
+                                            >
                                                 <TableCell className="px-4">
                                                     <Checkbox
                                                         checked={isSelected}
