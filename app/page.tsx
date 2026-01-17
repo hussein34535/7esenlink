@@ -522,6 +522,12 @@ http://example.com/stream3
 
                 {/* Actions Group */}
                 <div className="flex gap-2 w-full md:w-auto">
+                    {selectedLinks.length > 0 && (
+                        <Button onClick={() => setIsUpdateModalOpen(true)} disabled={isActionLoading}>
+                            <Save className="h-4 w-4 mr-2" />
+                            Update ({selectedLinks.length})
+                        </Button>
+                    )}
                     {/* Add Category */}
                     {!showNewCategoryInput ? (
                         <Button variant="outline" onClick={() => setShowNewCategoryInput(true)} className="bg-background flex-grow">
