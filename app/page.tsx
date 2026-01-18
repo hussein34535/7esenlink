@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner"
 import { Loader2, Search, Copy, Trash2, Plus, X, Edit2, ArrowUp, ArrowDown, Save, Pen, PlayCircle } from "lucide-react"
 import Link from "next/link"
+import Hls from "hls.js"
 import {
     Table,
     TableHeader,
@@ -22,10 +23,17 @@ import {
     DialogContent,
     DialogHeader,
     DialogTitle,
+    DialogDescription,
     DialogFooter,
     DialogClose
 } from "@/components/ui/dialog"
 import { Textarea } from "@/components/ui/textarea"
+import { MediaPlayer, MediaProvider } from '@vidstack/react';
+import { defaultLayoutIcons, DefaultVideoLayout } from '@vidstack/react/player/layouts/default';
+import '@vidstack/react/player/styles/default/theme.css';
+import '@vidstack/react/player/styles/default/layouts/video.css';
+import { Switch } from "@/components/ui/switch"
+import { Label } from "@/components/ui/label"
 
 interface ConvertedLink {
     id: number
@@ -56,6 +64,7 @@ export default function Home() {
     const [m3uContent, setM3uContent] = useState('')
     const [isActionLoading, setIsActionLoading] = useState(false)
     const [isManageCategoriesModalOpen, setIsManageCategoriesModalOpen] = useState(false)
+    const [useProxy, setUseProxy] = useState(true)
     const [playingUrl, setPlayingUrl] = useState<string | null>(null)
 
     useEffect(() => {
@@ -621,7 +630,7 @@ http://example.com/stream3
                                                 className={`cursor-pointer transition-colors hover:bg-muted/50 ${isSelected ? "bg-muted" : ""}`}
                                                 onClick={(e) => {
                                                     // Prevent toggle if clicking interactive elements
-                                                    if ((e.target as HTMLElement).closest('button, input, a, [role="button"], [role="checkbox"]')) return;
+                                                    if ((e.target as HTMLElement).closest('button, input, a')) return;
                                                     handleSelectLink(`${link.category}-${link.id}`, !isSelected);
                                                 }}
                                             >
@@ -739,6 +748,9 @@ http://example.com/stream3
                 <DialogContent className="sm:max-w-md">
                     <DialogHeader>
                         <DialogTitle>Update Selected Links</DialogTitle>
+                        <DialogDescription>
+                            Paste your M3U playlist content below to update the selected links.
+                        </DialogDescription>
                     </DialogHeader>
                     <div className="grid gap-4 py-4">
                         <p className="text-sm text-muted-foreground">
@@ -774,6 +786,9 @@ http://example.com/stream3
                 <DialogContent className="sm:max-w-md">
                     <DialogHeader>
                         <DialogTitle>Manage Categories</DialogTitle>
+                        <DialogDescription>
+                            Rename or reorder your existing categories. Changes apply to all links in the category.
+                        </DialogDescription>
                     </DialogHeader>
                     <div className="grid gap-4 py-4 max-h-[60vh] overflow-y-auto">
                         {categories.filter(c => c !== 'uncategorized').map((cat, index) => (
@@ -823,26 +838,84 @@ http://example.com/stream3
             </Dialog>
 
             <Dialog open={!!playingUrl} onOpenChange={(open) => !open && setPlayingUrl(null)}>
-                <DialogContent className="sm:max-w-3xl">
-                    <DialogHeader>
-                        <DialogTitle>Play Stream</DialogTitle>
+                <DialogContent className="sm:max-w-5xl w-full bg-zinc-950 border-zinc-800 p-5 flex flex-col text-zinc-100 shadow-2xl gap-4">
+                    <DialogHeader className="p-0 border-none">
+                        <DialogTitle className="text-lg font-semibold">Play Stream</DialogTitle>
+                        <DialogDescription className="text-zinc-400">
+                            Watch the selected stream directly. Use the toggle below if playback fails.
+                        </DialogDescription>
                     </DialogHeader>
-                    <div className="aspect-video bg-black rounded-md overflow-hidden relative flex items-center justify-center">
+
+                    <div className="w-full bg-black rounded-lg overflow-hidden ring-1 ring-zinc-800 shadow-lg">
                         {playingUrl && (
-                            <video
-                                src={playingUrl}
-                                controls
-                                autoPlay
-                                className="w-full h-full"
-                                onError={(e) => toast.error("Error playing video. Link might need to be opened in VLC or requires specific headers.")}
-                            >
-                                Your browser does not support the video tag.
-                            </video>
+                            <VideoPlayer url={playingUrl} useProxy={useProxy} />
                         )}
                     </div>
-                    <p className="text-xs text-muted-foreground break-all">{playingUrl}</p>
+
+                    <div className="flex items-center justify-between px-2 bg-zinc-900/50 p-2 rounded-md border border-zinc-800/50">
+                        <div className="flex items-center space-x-2">
+                            <Switch
+                                id="proxy-mode"
+                                checked={useProxy}
+                                onCheckedChange={setUseProxy}
+                            />
+                            <Label htmlFor="proxy-mode" className="text-xs font-medium text-zinc-300 cursor-pointer select-none">
+                                Bypass Restrictions (Proxy Mode)
+                            </Label>
+                        </div>
+                        <span className="text-[10px] text-zinc-500 hidden sm:inline-block">
+                            Enable if stream fails or shows black screen.
+                        </span>
+                    </div>
+
+                    <DialogFooter className="p-0 border-none gap-2 items-center sm:justify-between">
+                        <div className="hidden md:block flex-1 min-w-0">
+                            <p className="text-xs text-muted-foreground truncate font-mono bg-zinc-900 p-1.5 rounded">{playingUrl}</p>
+                        </div>
+                        <div className="flex gap-2 w-full md:w-auto">
+                            <Button
+                                type="button"
+                                variant="secondary"
+                                onClick={() => playingUrl && window.open(playingUrl, '_blank')}
+                                className="flex-1 md:flex-none"
+                            >
+                                Open in New Tab
+                            </Button>
+                            <DialogClose asChild>
+                                <Button type="button" variant="ghost">Close</Button>
+                            </DialogClose>
+                        </div>
+                    </DialogFooter>
                 </DialogContent>
             </Dialog>
         </div>
     )
 }
+
+// Video Player Component using Vidstack
+function VideoPlayer({ url, useProxy }: { url: string, useProxy: boolean }) {
+    const [finalUrl, setFinalUrl] = useState(url)
+
+    useEffect(() => {
+        if (useProxy) {
+            setFinalUrl(`/api/proxy?url=${encodeURIComponent(url)}`)
+        } else {
+            setFinalUrl(url)
+        }
+    }, [url, useProxy])
+
+    return (
+        <div className="w-full text-white flex flex-col gap-3">
+            <MediaPlayer
+                title="Stream"
+                src={{ src: finalUrl, type: 'application/x-mpegurl' }}
+                className="w-full aspect-video bg-black"
+                load="eager"
+            >
+                <MediaProvider />
+                <DefaultVideoLayout icons={defaultLayoutIcons} />
+            </MediaPlayer>
+        </div>
+    )
+}
+
