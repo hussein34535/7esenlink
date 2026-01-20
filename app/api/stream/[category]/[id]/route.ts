@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
-import { database } from '@/lib/firebase'; // Import Firebase database instance
-import { ref, get } from 'firebase/database'; // Import Firebase functions
-// Removed M3U8 parser import as it's no longer used
+import { database } from '@/lib/firebase';
+import { ref, get } from 'firebase/database';
 
 interface Link {
   id: number;
@@ -9,111 +8,143 @@ interface Link {
   original: string;
   converted: string;
   category: string;
-  createdAt: string; // Added createdAt based on other files
+  createdAt: string;
+}
+
+// CORS headers for browser compatibility
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
+  'Access-Control-Allow-Headers': '*',
+};
+
+// Handle OPTIONS preflight requests
+export async function OPTIONS() {
+  return new Response(null, { headers: corsHeaders });
 }
 
 // Function to get a specific link from Firebase
 async function getLinkById(id: number, category: string): Promise<Link | null> {
   try {
-    // Assuming links are stored as an array at the /links path
     const linksRef = ref(database, 'links');
     const snapshot = await get(linksRef);
     if (!snapshot.exists()) {
       console.log('Firebase path /links does not exist.');
       return null;
     }
-    
-    const linksArray: any[] = Array.isArray(snapshot.val()) 
-        ? snapshot.val() 
-        : Object.values(snapshot.val() || {}); // Handle array or object
 
-    // Find the link by ID and category (case-insensitive for category)
+    const linksArray: any[] = Array.isArray(snapshot.val())
+      ? snapshot.val()
+      : Object.values(snapshot.val() || {});
+
     const linkData = linksArray.find(link => link && link.id === id && link.category.toLowerCase() === category.toLowerCase());
 
     if (linkData) {
-        // Basic validation
-        if (typeof linkData.id === 'number' && 
-            typeof linkData.name === 'string' && 
-            typeof linkData.original === 'string' &&
-            typeof linkData.converted === 'string' &&
-            typeof linkData.category === 'string' &&
-            typeof linkData.createdAt === 'string') {
-                return linkData as Link;
-            }
-         else {
-            console.warn(`Link data for ID ${id} has incorrect structure.`);
-            return null;
-         }
+      if (typeof linkData.id === 'number' &&
+        typeof linkData.name === 'string' &&
+        typeof linkData.original === 'string' &&
+        typeof linkData.converted === 'string' &&
+        typeof linkData.category === 'string' &&
+        typeof linkData.createdAt === 'string') {
+        return linkData as Link;
+      }
+      else {
+        console.warn(`Link data for ID ${id} has incorrect structure.`);
+        return null;
+      }
     }
-    return null; // Link not found
+    return null;
   } catch (error) {
     console.error(`Error reading link ${id} from Firebase:`, error);
-    return null; // Return null on error
+    return null;
   }
 }
+
 export async function GET(
   request: Request,
-  context: { params: { category: string; id: string } } // Use a different name like 'context'
+  context: { params: { category: string; id: string } }
 ) {
   try {
-    // Access params from the context object
     const { category, id } = context.params;
     console.log(`Received request for category: ${category}, id: ${id}`);
-    console.log(`Received request for category: ${category}, id: ${id}`);
 
-    // Validate ID
     const linkId = parseInt(id);
     if (isNaN(linkId)) {
-      return NextResponse.json({ error: 'Invalid ID format' }, { status: 400 });
+      return NextResponse.json({ error: 'Invalid ID format' }, { status: 400, headers: corsHeaders });
     }
 
-    // Fetch the specific link from Firebase, passing both ID and category
     const link = await getLinkById(linkId, category);
 
     if (!link) {
       return NextResponse.json(
         { error: `Link with ID ${linkId} not found or invalid.` },
-        { status: 404 }
+        { status: 404, headers: corsHeaders }
       );
     }
     console.log(`Found link: ${JSON.stringify(link)}`);
 
-    // Check category match (case-insensitive)
     if (link.category.toLowerCase() !== category.toLowerCase()) {
       console.log(`Category mismatch: Expected ${link.category}, got ${category}`);
       return NextResponse.json(
         { error: `Category mismatch. Link belongs to category ${link.category}` },
-        { status: 400 }
+        { status: 400, headers: corsHeaders }
       );
     }
 
-    // Fetch the original URL
     const originalUrl = link.original;
     if (!originalUrl) {
-        console.error(`Original URL missing for link ID ${linkId}`);
-        return NextResponse.json({ error: 'Original URL not found for this link' }, { status: 404 });
+      console.error(`Original URL missing for link ID ${linkId}`);
+      return NextResponse.json({ error: 'Original URL not found for this link' }, { status: 404, headers: corsHeaders });
     }
 
-    // Ensure URL has protocol before redirecting
-    const urlToRedirect = originalUrl.startsWith('http://') || originalUrl.startsWith('https://')
+    const urlToFetch = originalUrl.startsWith('http://') || originalUrl.startsWith('https://')
       ? originalUrl
       : `http://${originalUrl}`;
 
-    console.log(`Redirecting client to: ${urlToRedirect}`);
-    
-    // Return a 302 redirect response
-    // Using 307 (Temporary Redirect) might be slightly more appropriate semantically
-    // as the resource itself hasn't moved, we're just directing the client there for this request.
-    return NextResponse.redirect(urlToRedirect, 307);
+    console.log(`Proxying stream from: ${urlToFetch}`);
+
+    // 🔴 Streaming Proxy: Fetch content server-side and pipe it back
+    const upstreamResponse = await fetch(urlToFetch, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': '*/*',
+      },
+      redirect: 'follow', // Follow any redirects from the upstream server
+    });
+
+    if (!upstreamResponse.ok) {
+      console.error(`Upstream server returned ${upstreamResponse.status}`);
+      return NextResponse.json(
+        { error: `Upstream server error: ${upstreamResponse.status}` },
+        { status: upstreamResponse.status, headers: corsHeaders }
+      );
+    }
+
+    // Stream the response back with CORS headers
+    const responseHeaders = new Headers(corsHeaders);
+
+    // Copy content-type from upstream if available
+    const contentType = upstreamResponse.headers.get('content-type');
+    if (contentType) {
+      responseHeaders.set('Content-Type', contentType);
+    } else {
+      // Default to HLS content type
+      responseHeaders.set('Content-Type', 'application/vnd.apple.mpegurl');
+    }
+
+    return new Response(upstreamResponse.body, {
+      status: 200,
+      headers: responseHeaders,
+    });
 
   } catch (error) {
     console.error('Error in stream endpoint:', error);
     return NextResponse.json(
-      { 
+      {
         error: 'Failed to process stream request',
         details: error instanceof Error ? error.message : 'Unknown server error'
       },
-      { status: 500 }
+      { status: 500, headers: corsHeaders }
     );
   }
 } 
