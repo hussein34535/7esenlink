@@ -101,38 +101,12 @@ export async function GET(
       ? originalUrl
       : `http://${originalUrl}`;
 
-    console.log(`Proxying stream from: ${streamUrl}`);
+    console.log(`Redirecting to: ${streamUrl}`);
 
-    // 🔴 Streaming Proxy: Fetch content server-side and pipe it back with CORS
-    const upstreamResponse = await fetch(streamUrl, {
-      headers: {
-        'User-Agent': 'VLC/3.0.20 LibVLC/3.0.20',
-        'Accept': '*/*',
-      },
-      redirect: 'follow',
-    });
-
-    if (!upstreamResponse.ok) {
-      console.error(`Upstream server returned ${upstreamResponse.status}`);
-      return NextResponse.json(
-        { error: `Upstream server error: ${upstreamResponse.status}` },
-        { status: upstreamResponse.status, headers: corsHeaders }
-      );
-    }
-
-    // Stream the response back with CORS headers
-    const responseHeaders = new Headers(corsHeaders);
-    const contentType = upstreamResponse.headers.get('content-type');
-    if (contentType) {
-      responseHeaders.set('Content-Type', contentType);
-    } else {
-      responseHeaders.set('Content-Type', 'application/vnd.apple.mpegurl');
-    }
-
-    return new Response(upstreamResponse.body, {
-      status: 200,
-      headers: responseHeaders,
-    });
+    // 🔴 307 Redirect: Maintains backward compatibility with mobile apps
+    // Mobile apps follow the redirect and play the stream
+    // Web browsers will face CORS (expected - web players handle this differently)
+    return NextResponse.redirect(streamUrl, 307);
 
   } catch (error) {
     console.error('Error in stream endpoint:', error);
