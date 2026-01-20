@@ -97,47 +97,25 @@ export async function GET(
       return NextResponse.json({ error: 'Original URL not found for this link' }, { status: 404, headers: corsHeaders });
     }
 
-    const urlToFetch = originalUrl.startsWith('http://') || originalUrl.startsWith('https://')
+    const streamUrl = originalUrl.startsWith('http://') || originalUrl.startsWith('https://')
       ? originalUrl
       : `http://${originalUrl}`;
 
-    console.log(`Proxying stream from: ${urlToFetch}`);
+    console.log(`Returning direct URL: ${streamUrl}`);
 
-    // 🔴 Streaming Proxy: Mimic VLC behavior (no Referer/Origin)
-    const upstreamResponse = await fetch(urlToFetch, {
-      headers: {
-        // VLC-like User-Agent - some servers prefer this over browser UAs
-        'User-Agent': 'VLC/3.0.20 LibVLC/3.0.20',
-        'Accept': '*/*',
-        // NO Referer or Origin - VLC doesn't send these!
+    // 🔴 URL Passthrough Mode: Return the URL for the client to fetch directly
+    // This allows the user's browser to fetch with their residential IP
+    return NextResponse.json(
+      {
+        url: streamUrl,
+        name: link.name,
+        category: link.category
       },
-      redirect: 'follow',
-    });
-
-    if (!upstreamResponse.ok) {
-      console.error(`Upstream server returned ${upstreamResponse.status}`);
-      return NextResponse.json(
-        { error: `Upstream server error: ${upstreamResponse.status}` },
-        { status: upstreamResponse.status, headers: corsHeaders }
-      );
-    }
-
-    // Stream the response back with CORS headers
-    const responseHeaders = new Headers(corsHeaders);
-
-    // Copy content-type from upstream if available
-    const contentType = upstreamResponse.headers.get('content-type');
-    if (contentType) {
-      responseHeaders.set('Content-Type', contentType);
-    } else {
-      // Default to HLS content type
-      responseHeaders.set('Content-Type', 'application/vnd.apple.mpegurl');
-    }
-
-    return new Response(upstreamResponse.body, {
-      status: 200,
-      headers: responseHeaders,
-    });
+      {
+        status: 200,
+        headers: corsHeaders
+      }
+    );
 
   } catch (error) {
     console.error('Error in stream endpoint:', error);
