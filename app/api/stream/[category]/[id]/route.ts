@@ -101,21 +101,38 @@ export async function GET(
       ? originalUrl
       : `http://${originalUrl}`;
 
-    console.log(`Returning direct URL: ${streamUrl}`);
+    console.log(`Proxying stream from: ${streamUrl}`);
 
-    // 🔴 URL Passthrough Mode: Return the URL for the client to fetch directly
-    // This allows the user's browser to fetch with their residential IP
-    return NextResponse.json(
-      {
-        url: streamUrl,
-        name: link.name,
-        category: link.category
+    // 🔴 Streaming Proxy: Fetch content server-side and pipe it back with CORS
+    const upstreamResponse = await fetch(streamUrl, {
+      headers: {
+        'User-Agent': 'VLC/3.0.20 LibVLC/3.0.20',
+        'Accept': '*/*',
       },
-      {
-        status: 200,
-        headers: corsHeaders
-      }
-    );
+      redirect: 'follow',
+    });
+
+    if (!upstreamResponse.ok) {
+      console.error(`Upstream server returned ${upstreamResponse.status}`);
+      return NextResponse.json(
+        { error: `Upstream server error: ${upstreamResponse.status}` },
+        { status: upstreamResponse.status, headers: corsHeaders }
+      );
+    }
+
+    // Stream the response back with CORS headers
+    const responseHeaders = new Headers(corsHeaders);
+    const contentType = upstreamResponse.headers.get('content-type');
+    if (contentType) {
+      responseHeaders.set('Content-Type', contentType);
+    } else {
+      responseHeaders.set('Content-Type', 'application/vnd.apple.mpegurl');
+    }
+
+    return new Response(upstreamResponse.body, {
+      status: 200,
+      headers: responseHeaders,
+    });
 
   } catch (error) {
     console.error('Error in stream endpoint:', error);
