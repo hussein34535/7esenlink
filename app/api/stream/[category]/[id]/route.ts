@@ -103,11 +103,16 @@ export async function GET(
 
     console.log(`Proxying stream from: ${urlToFetch}`);
 
+    // Extract origin for Referer/Origin headers
+    const targetOrigin = new URL(urlToFetch).origin;
+
     // 🔴 Streaming Proxy: Fetch content server-side and pipe it back
     const upstreamResponse = await fetch(urlToFetch, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         'Accept': '*/*',
+        'Referer': targetOrigin + '/', // Mimic browser behavior
+        'Origin': targetOrigin,
       },
       redirect: 'follow', // Follow any redirects from the upstream server
     });
