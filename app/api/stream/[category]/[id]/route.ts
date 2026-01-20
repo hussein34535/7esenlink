@@ -103,18 +103,15 @@ export async function GET(
 
     console.log(`Proxying stream from: ${urlToFetch}`);
 
-    // Extract origin for Referer/Origin headers
-    const targetOrigin = new URL(urlToFetch).origin;
-
-    // 🔴 Streaming Proxy: Fetch content server-side and pipe it back
+    // 🔴 Streaming Proxy: Mimic VLC behavior (no Referer/Origin)
     const upstreamResponse = await fetch(urlToFetch, {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        // VLC-like User-Agent - some servers prefer this over browser UAs
+        'User-Agent': 'VLC/3.0.20 LibVLC/3.0.20',
         'Accept': '*/*',
-        'Referer': targetOrigin + '/', // Mimic browser behavior
-        'Origin': targetOrigin,
+        // NO Referer or Origin - VLC doesn't send these!
       },
-      redirect: 'follow', // Follow any redirects from the upstream server
+      redirect: 'follow',
     });
 
     if (!upstreamResponse.ok) {
