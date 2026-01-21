@@ -103,6 +103,12 @@ export async function GET(
 
     console.log(`Redirecting to: ${streamUrl}`);
 
+    // Check for "json" mode (for Web Players that need to proxy the final URL)
+    const { searchParams } = new URL(request.url);
+    if (searchParams.get('json') === 'true') {
+      return NextResponse.json({ url: streamUrl }, { status: 200, headers: corsHeaders });
+    }
+
     // 🔴 307 Redirect: Maintains backward compatibility with mobile apps
     // Mobile apps follow the redirect and play the stream
     // Web browsers will face CORS (expected - web players handle this differently)
