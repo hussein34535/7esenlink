@@ -57,7 +57,9 @@ export async function POST(req: Request) {
     const db = getAdminDB();
     const catSnap = await db.ref(`/${category}`).once('value');
     const existing = catSnap.exists() ? catSnap.val() : {};
-    const existingIds = Object.values<any>(existing).map((l: any) => l.id || 0);
+    const existingList = Array.isArray(existing) ? existing : Object.values<any>(existing || {});
+    const validLinks = existingList.filter((l: any) => l !== null && l !== undefined);
+    const existingIds = validLinks.map((l: any) => l.id || 0);
     let maxId = existingIds.length > 0 ? Math.max(...existingIds) : 0;
 
     for (const pl of parsedLinks) {

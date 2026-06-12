@@ -14,8 +14,11 @@ async function getAllData() {
   const links: any[] = [];
   for (const category of categories) {
     const catLinks = raw[category];
-    if (catLinks && typeof catLinks === 'object' && !Array.isArray(catLinks)) {
-      for (const [id, link] of Object.entries<any>(catLinks)) {
+    if (catLinks && typeof catLinks === 'object') {
+      const entries = Object.entries<any>(catLinks);
+
+      for (const [id, link] of entries) {
+        if (!link) continue;
         links.push({
           id: link.id || Number(id) || id,
           name: link.name,
@@ -48,9 +51,14 @@ export async function POST(req: Request) {
 
     const catSnap = await db.ref(`/${category}`).once('value');
     const existing = catSnap.exists() ? catSnap.val() : {};
+    
+    // Safety check for array/nulls when finding maxId
+    const existingList = Array.isArray(existing) ? existing : Object.values<any>(existing || {});
+    const validLinks = existingList.filter((l: any) => l !== null && l !== undefined);
+    
     const maxId =
-      Object.keys(existing).length > 0
-        ? Math.max(...Object.values<any>(existing).map((l: any) => l.id || 0))
+      validLinks.length > 0
+        ? Math.max(...validLinks.map((l: any) => l.id || 0))
         : 0;
 
     const newId = maxId + 1;

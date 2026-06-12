@@ -22,7 +22,12 @@ export async function POST(req: Request) {
       if (!snap.exists()) continue;
 
       const links = snap.val();
-      for (const [id, link] of Object.entries<any>(links)) {
+      const entries = Array.isArray(links)
+        ? links.map((link, idx) => [idx, link])
+        : Object.entries<any>(links || {});
+
+      for (const [id, link] of entries) {
+        if (!link) continue;
         if (link.original && link.original.includes(findText)) {
           const updated = link.original.replaceAll(findText, replaceText || '');
           await db.ref(`/${cat}/${id}/original`).set(updated);
