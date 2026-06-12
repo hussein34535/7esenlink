@@ -20,6 +20,7 @@ export default function RootLayout({
   const navigation = [
     { name: 'Links', href: '/', icon: '📋' },
     { name: 'Import', href: '/import', icon: '📥' },
+    { name: 'AI Manager', href: '/ai-manager', icon: '🤖' },
   ]
 
   return (

@@ -1,158 +1,60 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { database } from '@/lib/firebase'; // Import Firebase database instance
-import { ref, get, set } from 'firebase/database'; // Import Firebase functions
+import { readFile, writeFile } from 'fs/promises';
+import { join } from 'path';
+import { NextResponse } from 'next/server';
 
-// Keep the Link interface consistent
-interface Link {
-  id: number
-  name: string
-  original: string
-  converted: string
-  category: string
-  createdAt: string
-}
+const filePath = join(process.cwd(), 'data', 'links.json');
 
-// Function to get all links from Firebase (copied from import route for consistency)
-async function getLinksFromFirebase(): Promise<Link[]> {
-    try {
-        const linksRef = ref(database, 'links');
-        const snapshot = await get(linksRef);
-        if (!snapshot.exists()) {
-            console.log('Firebase path /links does not exist. Returning empty array.');
-            return [];
-        }
-        // Handle both array and object structures from Firebase
-        const linksData = snapshot.val();
-        const linksArray: Link[] = Array.isArray(linksData)
-            ? linksData.filter(link => link !== null) // Filter out potential nulls if stored as sparse array
-            : Object.values(linksData || {});
-
-        // Basic validation for each link (optional but recommended) and normalize category to lowercase
-        return linksArray.filter(link =>
-            link &&
-            typeof link.id === 'number' &&
-            typeof link.name === 'string' &&
-            typeof link.original === 'string' &&
-            typeof link.converted === 'string' &&
-            typeof link.category === 'string' &&
-            typeof link.createdAt === 'string'
-        ).map(link => ({
-            ...link,
-            category: link.category.toLowerCase() // Normalize category to lowercase here
-        }));
-    } catch (error) {
-        console.error(`Error reading links from Firebase:`, error);
-        // Depending on requirements, you might want to throw the error
-        // or return an empty array to allow the operation to fail gracefully.
-        throw new Error('Failed to read links from Firebase');
-    }
-}
-
-// Function to write all links to Firebase (overwrites existing data at /links)
-async function writeLinksToFirebase(links: Link[]): Promise<void> {
-    try {
-        const linksRef = ref(database, 'links');
-        // Overwrite the entire /links path with the new array
-        // Ensure nulls aren't written if Firebase expects dense arrays or objects
-        const dataToWrite = links.filter(link => link !== null);
-        await set(linksRef, dataToWrite);
-        console.log(`Successfully wrote ${dataToWrite.length} links to Firebase.`);
-    } catch (error) {
-        console.error(`Error writing links to Firebase:`, error);
-        throw error; // Re-throw the error to be caught by the main handler
-    }
-}
-
-// Function to parse M3U content and extract URLs
-function parseM3UUrls(content: string): string[] {
-  const lines = content.split(/\r\n|\n/)
-  const urls: string[] = []
-
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i].trim()
-    // Ensure it's a URL (simple check for http/https) and not empty/comment
-    if (line && !line.startsWith('#') && (line.startsWith('http://') || line.startsWith('https://'))) {
-      urls.push(line)
-    }
-  }
-
-  return urls
-}
-
-export async function POST(request: NextRequest) {
+async function getLinksData() {
   try {
-    const { linkIds: compositeLinkIds, m3uContent } = await request.json(); // Renamed linkIds to compositeLinkIds
+    const content = await readFile(filePath, 'utf8');
+    return JSON.parse(content);
+  } catch (e) {
+    return { links: [], categories: [] };
+  }
+}
 
-    if (!Array.isArray(compositeLinkIds) || compositeLinkIds.length === 0) {
-      return NextResponse.json({ error: 'No links selected' }, { status: 400 });
+async function saveLinksData(data: any) {
+  await writeFile(filePath, JSON.stringify(data, null, 2));
+}
+
+export async function POST(req: Request) {
+  try {
+    const body = await req.json();
+    const { linkIds, m3uContent } = body; // linkIds are composite keys like 'category-id'
+
+    if (!linkIds || !m3uContent) {
+      return NextResponse.json({ error: 'linkIds and m3uContent are required' }, { status: 400 });
     }
 
-    // Parse composite link IDs into an array of { id: number, category: string }
-    const parsedLinkIds = compositeLinkIds.map((compositeId: string) => {
-      const [categoryStr, idStr] = compositeId.split('-');
-      return { id: parseInt(idStr), category: categoryStr };
-    });
+    // Parse the M3U content to extract URLs
+    const lines = m3uContent.split('\n');
+    const urls = lines
+      .map((line: string) => line.trim())
+      .filter((line: string) => line.length > 0 && !line.startsWith('#'));
 
-    if (!m3uContent) {
-      return NextResponse.json({ error: 'No M3U content provided' }, { status: 400 });
-    }
-
-    const urls = parseM3UUrls(m3uContent);
-    if (urls.length === 0) {
-      return NextResponse.json({ error: 'No valid URLs found in M3U content' }, { status: 400 });
-    }
-
-    if (urls.length !== parsedLinkIds.length) {
+    if (urls.length !== linkIds.length) {
       return NextResponse.json({
-        error: 'Number of URLs in M3U content does not match number of selected links',
-        details: {
-          selectedLinks: parsedLinkIds.length,
-          urlsFound: urls.length
-        }
+        error: `عدد الروابط المكتشفة في ملف M3U (${urls.length}) لا يتطابق مع عدد القنوات المحددة (${linkIds.length}).`
       }, { status: 400 });
     }
 
-    // Read existing links from Firebase
-    const existingLinks = await getLinksFromFirebase();
+    const data = await getLinksData();
 
-    // Update each selected link with the corresponding URL
-    let updatedCount = 0;
-    const updatedLinks = [...existingLinks]; // Create a mutable copy
+    // Map keys to update links
+    for (let i = 0; i < linkIds.length; i++) {
+      const compositeKey = linkIds[i];
+      const [category, idStr] = compositeKey.split('-');
+      const id = parseInt(idStr);
 
-    parsedLinkIds.forEach((parsedId, index) => {
-      const linkIndex = updatedLinks.findIndex(
-        l => l.id === parsedId.id && l.category === parsedId.category
-      );
-
-      if (linkIndex !== -1) {
-        updatedLinks[linkIndex] = {
-            ...updatedLinks[linkIndex],
-            original: urls[index] // Update the original URL
-        };
-        updatedCount++;
-      } else {
-          console.warn(`Link with ID ${parsedId.id} and category ${parsedId.category} not found in Firebase data.`);
+      const index = data.links.findIndex((l: any) => l.id === id && l.category.toLowerCase() === category.toLowerCase());
+      if (index !== -1) {
+        data.links[index].original = urls[i];
       }
-    });
-
-    if (updatedCount === 0) {
-      // This could happen if the selected IDs/categories don't exist in Firebase anymore
-      return NextResponse.json({ error: 'No matching links found to update' }, { status: 404 });
     }
 
-    // Write the updated list back to Firebase
-    await writeLinksToFirebase(updatedLinks);
-
-    return NextResponse.json({
-      message: `Successfully updated ${updatedCount} links`,
-      updatedCount
-    })
-
-  } catch (error) {
-    console.error('Error updating links:', error)
-    return NextResponse.json({
-      error: 'Failed to update links',
-      details: error instanceof Error ? error.message : 'Unknown error'
-    }, { status: 500 })
+    await saveLinksData(data);
+    return NextResponse.json({ success: true });
+  } catch (error: any) {
+    return NextResponse.json({ error: 'Failed to update links', details: error.message }, { status: 500 });
   }
 }

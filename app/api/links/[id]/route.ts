@@ -1,57 +1,57 @@
-import { NextResponse } from 'next/server'
-import { database } from '@/lib/firebase'
-import { ref, get, update } from 'firebase/database'
+import { readFile, writeFile } from 'fs/promises';
+import { join } from 'path';
+import { NextResponse } from 'next/server';
+
+const filePath = join(process.cwd(), 'data', 'links.json');
+
+async function getLinksData() {
+  try {
+    const content = await readFile(filePath, 'utf8');
+    return JSON.parse(content);
+  } catch (e) {
+    return { links: [], categories: [] };
+  }
+}
+
+async function saveLinksData(data: any) {
+  await writeFile(filePath, JSON.stringify(data, null, 2));
+}
 
 export async function PATCH(
-  request: Request,
-  { params }: { params: { id: string } }
+  req: Request,
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const id = params.id
-    const { name, category, originalCategory, newCategory } = await request.json()
+    const { id } = await params;
+    const body = await req.json();
+    const data = await getLinksData();
+    const linkId = parseInt(id);
 
-    // If updating category (moving logic), reuse existing logic or improve it
-    // The existing code for moving categories was likely in a different route or handled differently.
-    // The UI now sends PATCH to /api/links/[id] for name updates too.
-
-    const linksRef = ref(database, 'links')
-    const snapshot = await get(linksRef)
-
-    if (!snapshot.exists()) {
-      return NextResponse.json({ error: 'Link not found' }, { status: 404 })
+    const index = data.links.findIndex((l: any) => l.id === linkId);
+    if (index === -1) {
+      return NextResponse.json({ error: 'Link not found' }, { status: 404 });
     }
 
-    const links = snapshot.val() as any[]
-    const linkIndex = links.findIndex((l: any) => l.id === parseInt(id))
+    const currentLink = data.links[index];
 
-    if (linkIndex === -1) {
-      return NextResponse.json({ error: 'Link not found' }, { status: 404 })
+    if (body.name !== undefined) {
+      currentLink.name = body.name;
     }
 
-    const linkToUpdate = links[linkIndex]
-    const updates: any = {}
-
-    if (name !== undefined) {
-      updates[`links/${linkIndex}/name`] = name
+    if (body.newCategory !== undefined) {
+      currentLink.category = body.newCategory;
+      currentLink.converted = `/api/stream/${body.newCategory.toLowerCase()}/${currentLink.id}`;
     }
 
-    if (category !== undefined) {
-      updates[`links/${linkIndex}/category`] = category.toLowerCase()
-      // Also verify if we need to update 'converted' URL to reflect new category if that was the logic
-      // The original code in page.tsx client-side updated it: `/api/stream/${newCategory.toLowerCase()}/${link.id}`
-      // We should update it here too for consistency if we want backend to be authoritative, 
-      // BUT the client-side optimistic update did it. Let's do it here too.
-      updates[`links/${linkIndex}/converted`] = `/api/stream/${category.toLowerCase()}/${linkToUpdate.id}`
+    if (body.original !== undefined) {
+      currentLink.original = body.original;
     }
 
-    await update(ref(database), updates)
+    data.links[index] = currentLink;
+    await saveLinksData(data);
 
-    return NextResponse.json({ success: true })
-  } catch (error) {
-    console.error('Error updating link:', error)
-    return NextResponse.json(
-      { error: 'Failed to update link' },
-      { status: 500 }
-    )
+    return NextResponse.json(currentLink);
+  } catch (error: any) {
+    return NextResponse.json({ error: 'Failed to update link', details: error.message }, { status: 500 });
   }
 }

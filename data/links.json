@@ -2,86 +2,159 @@
   "links": [
     {
       "id": 1,
-      "name": "beIN SPORTS 1 4K",
-      "original": "http://173.212.193.243:8080/live/EGJct7UyMD/l97PbPoFVd/879.ts",
+      "name": "BEIN SPORTS 1 FHD",
+      "original": "https://live.aab1.top/live/odai/123321/7.ts",
       "converted": "/api/stream/beinfhd/1",
       "category": "beinFHD",
-      "createdAt": "2025-04-07T00:00:21.909Z"
+      "createdAt": "2026-06-12T08:19:14.835Z"
     },
     {
       "id": 2,
-      "name": "beIN SPORTS 2 4K",
-      "original": "http://cyberfamily.sytes.net:25461/live/cyber4k/xtreamtv/4.m3u8",
+      "name": "BEIN SPORTS 2 FHD",
+      "original": "https://live.aab1.top/live/odai/123321/14.ts",
       "converted": "/api/stream/beinfhd/2",
       "category": "beinFHD",
-      "createdAt": "2025-04-07T00:00:21.909Z"
+      "createdAt": "2026-06-12T08:19:15.154Z"
     },
     {
       "id": 3,
-      "name": "beIN SPORTS 3 4K",
-      "original": "http://cyberfamily.sytes.net:25461/live/cyber4k/xtreamtv/5.m3u8",
+      "name": "BEIN SPORTS 3 FHD",
+      "original": "https://live.aab1.top/live/odai/123321/283.ts",
       "converted": "/api/stream/beinfhd/3",
       "category": "beinFHD",
-      "createdAt": "2025-04-07T00:00:21.909Z"
+      "createdAt": "2026-06-12T08:19:15.283Z"
     },
     {
       "id": 4,
-      "name": "beIN SPORTS 4 4K",
-      "original": "http://cyberfamily.sytes.net:25461/live/cyber4k/xtreamtv/6.m3u8",
+      "name": "BEIN SPORTS 4 FHD",
+      "original": "https://live.aab1.top/live/odai/123321/23.ts",
       "converted": "/api/stream/beinfhd/4",
       "category": "beinFHD",
-      "createdAt": "2025-04-07T00:00:21.909Z"
+      "createdAt": "2026-06-12T08:19:15.600Z"
     },
     {
       "id": 5,
-      "name": "beIN SPORTS 5 4K",
-      "original": "http://cyberfamily.sytes.net:25461/live/cyber4k/xtreamtv/7.m3u8",
+      "name": "BEIN SPORTS 5 FHD",
+      "original": "https://live.aab1.top/live/odai/123321/30.ts",
       "converted": "/api/stream/beinfhd/5",
       "category": "beinFHD",
-      "createdAt": "2025-04-07T00:00:21.909Z"
+      "createdAt": "2026-06-12T08:19:15.721Z"
     },
     {
       "id": 6,
-      "name": "beIN SPORTS 6 4K",
-      "original": "http://cyberfamily.sytes.net:25461/live/cyber4k/xtreamtv/8.m3u8",
+      "name": "BEIN SPORTS 6 FHD",
+      "original": "https://live.aab1.top/live/odai/123321/37.ts",
       "converted": "/api/stream/beinfhd/6",
       "category": "beinFHD",
-      "createdAt": "2025-04-07T00:00:21.909Z"
+      "createdAt": "2026-06-12T08:19:15.991Z"
     },
     {
       "id": 7,
-      "name": "beIN SPORTS 7 4K",
-      "original": "http://cyberfamily.sytes.net:25461/live/cyber4k/xtreamtv/9.m3u8",
+      "name": "BEIN SPORTS 7 FHD",
+      "original": "https://live.aab1.top/live/odai/123321/44.ts",
       "converted": "/api/stream/beinfhd/7",
       "category": "beinFHD",
-      "createdAt": "2025-04-07T00:00:21.909Z"
+      "createdAt": "2026-06-12T08:19:16.095Z"
     },
     {
       "id": 8,
-      "name": "beIN SPORTS 8 4K",
-      "original": "http://cyberfamily.sytes.net:25461/live/cyber4k/xtreamtv/10.m3u8",
+      "name": "BEIN SPORTS 8 FHD",
+      "original": "https://live.aab1.top/live/odai/123321/51.ts",
       "converted": "/api/stream/beinfhd/8",
       "category": "beinFHD",
-      "createdAt": "2025-04-07T00:00:21.909Z"
+      "createdAt": "2026-06-12T08:19:16.152Z"
     },
     {
       "id": 9,
-      "name": "beIN SPORTS 9 4K",
-      "original": "http://cyberfamily.sytes.net:25461/live/cyber4k/xtreamtv/11.m3u8",
+      "name": "BEIN SPORTS 9 FHD",
+      "original": "https://live.aab1.top/live/odai/123321/58.ts",
       "converted": "/api/stream/beinfhd/9",
       "category": "beinFHD",
-      "createdAt": "2025-04-07T00:00:21.909Z"
+      "createdAt": "2026-06-12T08:19:16.500Z"
     },
     {
       "id": 10,
-      "name": "sdgsdg",
-      "original": "https://vo-live.cdb.cdn.orange.com/Content/Channel/AbuDhabiSportsChannel1/HLS/index.m3u8",
-      "converted": "/api/stream/beinfhd/10",
-      "category": "beinFHD",
-      "createdAt": "2025-04-07T01:38:22.063Z"
+      "name": "ALWAN SPORT 1",
+      "original": "http://194.60.93.157/proxy?url=http://toytcl.xyz:8080/live//357643467990765/Ofgo3yz8CH/418112.ts",
+      "converted": "/api/stream/alwan group/10",
+      "category": "ALWAN GROUP",
+      "createdAt": "2026-06-12T08:19:22.742Z"
+    },
+    {
+      "id": 11,
+      "name": "ALWAN SPORT 2",
+      "original": "http://194.60.93.157/proxy?url=http://toytcl.xyz:8080/live//357643467990765/Ofgo3yz8CH/418114.ts",
+      "converted": "/api/stream/alwan group/11",
+      "category": "ALWAN GROUP",
+      "createdAt": "2026-06-12T08:19:22.813Z"
+    },
+    {
+      "id": 12,
+      "name": "ALWAN SPORT 3",
+      "original": "http://194.60.93.157/proxy?url=http://toytcl.xyz:8080/live//357643467990765/Ofgo3yz8CH/418117.ts",
+      "converted": "/api/stream/alwan group/12",
+      "category": "ALWAN GROUP",
+      "createdAt": "2026-06-12T08:19:22.856Z"
+    },
+    {
+      "id": 13,
+      "name": "ALWAN SPORT 4",
+      "original": "http://194.60.93.157/proxy?url=http://toytcl.xyz:8080/live//357643467990765/Ofgo3yz8CH/418120.ts",
+      "converted": "/api/stream/alwan group/13",
+      "category": "ALWAN GROUP",
+      "createdAt": "2026-06-12T08:19:22.908Z"
+    },
+    {
+      "id": 14,
+      "name": "ALWAN SPORT 5",
+      "original": "http://194.60.93.157/proxy?url=http://toytcl.xyz:8080/live//357643467990765/Ofgo3yz8CH/418123.ts",
+      "converted": "/api/stream/alwan group/14",
+      "category": "ALWAN GROUP",
+      "createdAt": "2026-06-12T08:19:22.969Z"
+    },
+    {
+      "id": 15,
+      "name": "ALWAN SPORT 6",
+      "original": "http://194.60.93.157/proxy?url=http://toytcl.xyz:8080/live//357643467990765/Ofgo3yz8CH/418126.ts",
+      "converted": "/api/stream/alwan group/15",
+      "category": "ALWAN GROUP",
+      "createdAt": "2026-06-12T08:19:23.012Z"
+    },
+    {
+      "id": 16,
+      "name": "ALWAN SPORT 7",
+      "original": "http://194.60.93.157/proxy?url=http://toytcl.xyz:8080/live//357643467990765/Ofgo3yz8CH/433739.ts",
+      "converted": "/api/stream/alwan group/16",
+      "category": "ALWAN GROUP",
+      "createdAt": "2026-06-12T08:19:23.052Z"
+    },
+    {
+      "id": 17,
+      "name": "ALWAN SPORT 8",
+      "original": "http://194.60.93.157/proxy?url=http://toytcl.xyz:8080/live//357643467990765/Ofgo3yz8CH/433740.ts",
+      "converted": "/api/stream/alwan group/17",
+      "category": "ALWAN GROUP",
+      "createdAt": "2026-06-12T08:19:23.090Z"
+    },
+    {
+      "id": 18,
+      "name": "ALWAN SPORT 9",
+      "original": "http://194.60.93.157/proxy?url=http://toytcl.xyz:8080/live//357643467990765/Ofgo3yz8CH/433741.ts",
+      "converted": "/api/stream/alwan group/18",
+      "category": "ALWAN GROUP",
+      "createdAt": "2026-06-12T08:19:23.127Z"
+    },
+    {
+      "id": 19,
+      "name": "ALWAN SPORT 10",
+      "original": "http://194.60.93.157/proxy?url=http://toytcl.xyz:8080/live//357643467990765/Ofgo3yz8CH/433742.ts",
+      "converted": "/api/stream/alwan group/19",
+      "category": "ALWAN GROUP",
+      "createdAt": "2026-06-12T08:19:23.163Z"
     }
   ],
   "categories": [
-    "beinFHD"
+    "beinFHD",
+    "ALWAN GROUP"
   ]
 }

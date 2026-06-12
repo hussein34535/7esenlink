@@ -1,86 +1,55 @@
-import { NextResponse } from 'next/server'
-import { database } from '@/lib/firebase'
-import { ref, get, set } from 'firebase/database'
+import { readFile, writeFile } from 'fs/promises';
+import { join } from 'path';
+import { NextResponse } from 'next/server';
 
-export async function POST(request: Request) {
-    try {
-        const { oldName, newName } = await request.json()
+const filePath = join(process.cwd(), 'data', 'links.json');
 
-        if (!oldName || !newName) {
-            return NextResponse.json(
-                { error: 'Old name and new name are required' },
-                { status: 400 }
-            )
-        }
+async function getLinksData() {
+  try {
+    const content = await readFile(filePath, 'utf8');
+    return JSON.parse(content);
+  } catch (e) {
+    return { links: [], categories: [] };
+  }
+}
 
-        if (oldName.trim().toLowerCase() === newName.trim().toLowerCase()) {
-            return NextResponse.json({ message: 'Names are identical, no changes made' })
-        }
+async function saveLinksData(data: any) {
+  await writeFile(filePath, JSON.stringify(data, null, 2));
+}
 
-        // 1. Fetch Categories
-        const categoriesRef = ref(database, 'categories')
-        const categoriesSnapshot = await get(categoriesRef)
+export async function POST(req: Request) {
+  try {
+    const body = await req.json();
+    const { oldName, newName } = body;
 
-        if (!categoriesSnapshot.exists()) {
-            return NextResponse.json({ error: 'Categories not found' }, { status: 404 })
-        }
-
-        const rawCategories: any[] = Array.isArray(categoriesSnapshot.val())
-            ? categoriesSnapshot.val()
-            : []
-
-        // 2. Fetch Links
-        const linksRef = ref(database, 'links')
-        const linksSnapshot = await get(linksRef)
-        const rawLinks: any[] = linksSnapshot.exists() && Array.isArray(linksSnapshot.val())
-            ? linksSnapshot.val()
-            : Object.values(linksSnapshot.val() || {})
-
-
-        // 3. Update Category List
-        // Find the index of the old name (case-insensitive search, preserve case or normalize?)
-        // Existing logic seems to imply lower-case storage for category ID but display might be mixed?
-        // Let's look for exact match or case-insensitive match.
-        // Assuming backend stores strings.
-
-        const categoryIndex = rawCategories.findIndex(c => c.toLowerCase() === oldName.toLowerCase())
-        if (categoryIndex === -1) {
-            return NextResponse.json({ error: 'Category not found' }, { status: 404 })
-        }
-
-        const updatedCategories = [...rawCategories]
-        updatedCategories[categoryIndex] = newName.trim()
-
-        // 4. Update Links
-        let updatedLinksCount = 0
-        const updatedLinks = rawLinks.map((link: any) => {
-            if (link && link.category && link.category.toLowerCase() === oldName.toLowerCase()) {
-                updatedLinksCount++
-                return {
-                    ...link,
-                    category: newName.toLowerCase(), // Normalize logic from before
-                    converted: `/api/stream/${newName.toLowerCase()}/${link.id}` // Update converted URL
-                }
-            }
-            return link
-        })
-
-        // 5. Save Both
-        await set(categoriesRef, updatedCategories)
-        if (updatedLinksCount > 0) {
-            await set(linksRef, updatedLinks)
-        }
-
-        return NextResponse.json({
-            message: 'Category renamed successfully',
-            updatedLinks: updatedLinksCount
-        })
-
-    } catch (error) {
-        console.error('Error renaming category:', error)
-        return NextResponse.json(
-            { error: 'Failed to rename category' },
-            { status: 500 }
-        )
+    if (!oldName || !newName) {
+      return NextResponse.json({ error: 'oldName and newName are required' }, { status: 400 });
     }
+
+    const data = await getLinksData();
+
+    // Update categories array
+    if (data.categories) {
+      data.categories = data.categories.map((c: string) => c.toLowerCase() === oldName.toLowerCase() ? newName : c);
+    }
+
+    // Update links having this category
+    if (data.links) {
+      data.links = data.links.map((link: any) => {
+        if (link.category.toLowerCase() === oldName.toLowerCase()) {
+          return {
+            ...link,
+            category: newName,
+            converted: `/api/stream/${newName.toLowerCase()}/${link.id}`
+          };
+        }
+        return link;
+      });
+    }
+
+    await saveLinksData(data);
+    return NextResponse.json({ success: true });
+  } catch (error: any) {
+    return NextResponse.json({ error: 'Failed to rename category', details: error.message }, { status: 500 });
+  }
 }
