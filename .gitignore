@@ -41,3 +41,4 @@ next-env.d.ts
 # data files
 /data/*.json
 !data/links.json
+.vercel
