@@ -16,7 +16,7 @@ export async function POST(req: Request) {
 
 You have access to the current database state:
 - Categories currently: ${JSON.stringify(currentCategories)}
-- Links currently: ${JSON.stringify((currentLinks || []).map((l: any) => ({ id: l.id, name: l.name, category: l.category, url: l.original })))}
+- Links currently: ${JSON.stringify((currentLinks || []).map((l: any) => ({ id: l.id, name: l.name, category: l.category })))}
 
 You MUST output a JSON response matching the schema details exactly.
 Available operation types you can output:
