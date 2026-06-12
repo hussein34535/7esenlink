@@ -1,21 +1,5 @@
 import { NextResponse } from 'next/server';
-import { initializeApp, getApps } from 'firebase/app';
-import { getDatabase, ref, get, set } from 'firebase/database';
-
-const firebaseConfig = {
-  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
-  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
-  databaseURL: process.env.NEXT_PUBLIC_FIREBASE_DATABASE_URL,
-  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
-};
-
-function getDB() {
-  if (!getApps().length) initializeApp(firebaseConfig);
-  return getDatabase();
-}
+import { getAdminDB } from '@/lib/firebaseAdmin';
 
 function parseM3U(m3uContent: string) {
   const lines = m3uContent.split('\n');
@@ -30,7 +14,7 @@ function parseM3U(m3uContent: string) {
         const url = lines[i + 1].trim();
         if (url && !url.startsWith('#')) {
           results.push({ name, url });
-          i++; // skip next line as it was parsed
+          i++;
         }
       }
     }
@@ -70,15 +54,12 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'No valid channels found in M3U' }, { status: 400 });
     }
 
-    const db = getDB();
-
-    // Get current category links to determine max id
-    const catSnap = await get(ref(db, `/${category}`));
+    const db = getAdminDB();
+    const catSnap = await db.ref(`/${category}`).once('value');
     const existing = catSnap.exists() ? catSnap.val() : {};
     const existingIds = Object.values<any>(existing).map((l: any) => l.id || 0);
     let maxId = existingIds.length > 0 ? Math.max(...existingIds) : 0;
 
-    // Write all new links to Firebase
     for (const pl of parsedLinks) {
       maxId++;
       const newLink = {
@@ -89,15 +70,15 @@ export async function POST(req: Request) {
         category,
         createdAt: new Date().toISOString(),
       };
-      await set(ref(db, `/${category}/${maxId}`), newLink);
+      await db.ref(`/${category}/${maxId}`).set(newLink);
     }
 
-    // Ensure category is in categories list
-    const catListSnap = await get(ref(db, '/categories'));
+    // Ensure category exists in categories list
+    const catListSnap = await db.ref('/categories').once('value');
     const catList: string[] = catListSnap.exists() ? catListSnap.val() : [];
     if (!catList.map((c: string) => c.toLowerCase()).includes(category)) {
       catList.push(category);
-      await set(ref(db, '/categories'), catList);
+      await db.ref('/categories').set(catList);
     }
 
     return NextResponse.json({ success: true, count: parsedLinks.length });

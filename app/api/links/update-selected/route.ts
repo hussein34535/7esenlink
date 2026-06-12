@@ -1,32 +1,15 @@
 import { NextResponse } from 'next/server';
-import { initializeApp, getApps } from 'firebase/app';
-import { getDatabase, ref, get, set } from 'firebase/database';
-
-const firebaseConfig = {
-  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
-  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
-  databaseURL: process.env.NEXT_PUBLIC_FIREBASE_DATABASE_URL,
-  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
-};
-
-function getDB() {
-  if (!getApps().length) initializeApp(firebaseConfig);
-  return getDatabase();
-}
+import { getAdminDB } from '@/lib/firebaseAdmin';
 
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { linkIds, m3uContent } = body; // linkIds are composite keys like 'category-id'
+    const { linkIds, m3uContent } = body;
 
     if (!linkIds || !m3uContent) {
       return NextResponse.json({ error: 'linkIds and m3uContent are required' }, { status: 400 });
     }
 
-    // Parse the M3U content to extract URLs
     const lines = m3uContent.split('\n');
     const urls = lines
       .map((line: string) => line.trim())
@@ -38,13 +21,11 @@ export async function POST(req: Request) {
       }, { status: 400 });
     }
 
-    const db = getDB();
+    const db = getAdminDB();
 
     for (let i = 0; i < linkIds.length; i++) {
-      const compositeKey = linkIds[i];
-      const [category, idStr] = compositeKey.split('-');
-      const id = parseInt(idStr);
-      await set(ref(db, `/${category}/${id}/original`), urls[i]);
+      const [category, idStr] = linkIds[i].split('-');
+      await db.ref(`/${category}/${idStr}/original`).set(urls[i]);
     }
 
     return NextResponse.json({ success: true });
