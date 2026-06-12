@@ -1,16 +1,20 @@
-import { readFile } from 'fs/promises';
-import { join } from 'path';
 import { NextResponse } from 'next/server';
+import { initializeApp, getApps } from 'firebase/app';
+import { getDatabase, ref, get } from 'firebase/database';
 
-const filePath = join(process.cwd(), 'data', 'links.json');
+const firebaseConfig = {
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
+  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+  databaseURL: process.env.NEXT_PUBLIC_FIREBASE_DATABASE_URL,
+  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
+};
 
-async function getLinksData() {
-  try {
-    const content = await readFile(filePath, 'utf8');
-    return JSON.parse(content);
-  } catch (e) {
-    return { links: [] };
-  }
+function getDB() {
+  if (!getApps().length) initializeApp(firebaseConfig);
+  return getDatabase();
 }
 
 export async function GET(
@@ -18,17 +22,20 @@ export async function GET(
   { params }: { params: Promise<{ category: string; id: string }> }
 ) {
   try {
-    const { id } = await params;
-    const linkId = parseInt(id);
-    const data = await getLinksData();
+    const { category, id } = await params;
+    const db = getDB();
+    const snapshot = await get(ref(db, `/${category}/${id}`));
 
-    const link = data.links.find((l: any) => l.id === linkId);
-
-    if (!link || !link.original) {
+    if (!snapshot.exists()) {
       return new Response('Stream Not Found', { status: 404 });
     }
 
-    return NextResponse.redirect(link.original);
+    const link = snapshot.val();
+    if (!link?.original) {
+      return new Response('Stream Not Found', { status: 404 });
+    }
+
+    return NextResponse.redirect(link.original, { status: 307 });
   } catch (error: any) {
     return new Response('Internal Server Error', { status: 500 });
   }

@@ -1,20 +1,20 @@
-import { readFile, writeFile } from 'fs/promises';
-import { join } from 'path';
 import { NextResponse } from 'next/server';
+import { initializeApp, getApps } from 'firebase/app';
+import { getDatabase, ref, get, set } from 'firebase/database';
 
-const filePath = join(process.cwd(), 'data', 'links.json');
+const firebaseConfig = {
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
+  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+  databaseURL: process.env.NEXT_PUBLIC_FIREBASE_DATABASE_URL,
+  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
+};
 
-async function getLinksData() {
-  try {
-    const content = await readFile(filePath, 'utf8');
-    return JSON.parse(content);
-  } catch (e) {
-    return { links: [], categories: [] };
-  }
-}
-
-async function saveLinksData(data: any) {
-  await writeFile(filePath, JSON.stringify(data, null, 2));
+function getDB() {
+  if (!getApps().length) initializeApp(firebaseConfig);
+  return getDatabase();
 }
 
 export async function POST(req: Request) {
@@ -38,21 +38,15 @@ export async function POST(req: Request) {
       }, { status: 400 });
     }
 
-    const data = await getLinksData();
+    const db = getDB();
 
-    // Map keys to update links
     for (let i = 0; i < linkIds.length; i++) {
       const compositeKey = linkIds[i];
       const [category, idStr] = compositeKey.split('-');
       const id = parseInt(idStr);
-
-      const index = data.links.findIndex((l: any) => l.id === id && l.category.toLowerCase() === category.toLowerCase());
-      if (index !== -1) {
-        data.links[index].original = urls[i];
-      }
+      await set(ref(db, `/${category}/${id}/original`), urls[i]);
     }
 
-    await saveLinksData(data);
     return NextResponse.json({ success: true });
   } catch (error: any) {
     return NextResponse.json({ error: 'Failed to update links', details: error.message }, { status: 500 });
