@@ -26,6 +26,10 @@ Available operation types you can output:
 4. DELETE_LINK: Delete an existing link. Provide 'linkId' (number) or 'linkName' (string).
 5. REPLACE_CATEGORY_LINKS: Replace all links inside a category with a new list of links. This deletes all links currently in this category and creates the new links. Provide 'categoryName' and 'links' (array of objects containing 'name' and 'originalUrl').
 
+CRITICAL INSTRUCTIONS FOR QUALITIES AND CATEGORIES:
+- PRESERVE STREAM QUALITIES: If a single channel has multiple links with different stream qualities (such as FHD, HD, SD, 4K, HEVC, Low, etc.), treat each quality stream as a separate distinct link. The 'linkName' MUST preserve the quality suffix (e.g. 'الجزيرة HD', 'الجزيرة SD', 'BeIN Sports 1 FHD', 'BeIN Sports 1 SD') so that they are created as separate entries and do not overwrite each other.
+- AUTO-CATEGORIZATION: Group and classify channels into their corresponding categories based on their names (e.g., channels containing 'BeIN Sports', 'AD Sports', or 'SSC' go to 'Sports' or respective categories; channels with 'OSN', 'HBO', or 'Netflix' go to 'OSN' or 'Movies'; channels with 'MBC' go to 'MBC', etc.). If the user specifies a target category, place all channels there.
+
 Make sure you map target link/category names to the ones already existing in the database context if there are slight spelling variations.`;
 
     const responseSchema = {

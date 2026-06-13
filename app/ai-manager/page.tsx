@@ -143,15 +143,16 @@ export default function AILinkManager() {
     }
   };
 
-  const handleApply = async () => {
-    if (!actions || actions.length === 0) return;
+  const handleApply = async (actionsToApply?: AIOperation[]) => {
+    const targetActions = actionsToApply || actions;
+    if (!targetActions || targetActions.length === 0) return;
 
     setExecuting(true);
     setError(null);
     setSuccessMessage(null);
 
     try {
-      for (const action of actions) {
+      for (const action of targetActions) {
         if (action.type === 'CREATE_CATEGORY' && action.categoryName) {
           await fetch('/api/links/categories', {
             method: 'POST',
@@ -174,15 +175,26 @@ export default function AILinkManager() {
         
         else if (action.type === 'UPDATE_LINK_URL' && action.originalUrl) {
           let linkId = action.linkId;
-          if (!linkId && action.linkName) {
-            const match = currentLinks.find((l: any) => l.name.toLowerCase() === action.linkName.toLowerCase());
-            if (match) linkId = match.id;
+          let category = action.categoryName || '';
+          
+          const match = currentLinks.find((l: any) => 
+            (linkId && l.id === linkId) || 
+            (!linkId && action.linkName && l.name.toLowerCase() === action.linkName.toLowerCase())
+          );
+          
+          if (match) {
+            linkId = match.id;
+            category = match.category;
           }
-          if (linkId) {
+          
+          if (linkId && category) {
             await fetch(`/api/links/${linkId}`, {
               method: 'PATCH',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ original: action.originalUrl })
+              body: JSON.stringify({ 
+                original: action.originalUrl,
+                category: category 
+              })
             });
           }
         } 
@@ -190,14 +202,18 @@ export default function AILinkManager() {
         else if (action.type === 'DELETE_LINK') {
           let linkId = action.linkId;
           let category = '';
-          if (!linkId && action.linkName) {
-            const match = currentLinks.find((l: any) => l.name.toLowerCase() === action.linkName.toLowerCase());
-            if (match) {
-              linkId = match.id;
-              category = match.category;
-            }
+          
+          const match = currentLinks.find((l: any) => 
+            (linkId && l.id === linkId) || 
+            (!linkId && action.linkName && l.name.toLowerCase() === action.linkName.toLowerCase())
+          );
+          
+          if (match) {
+            linkId = match.id;
+            category = match.category;
           }
-          if (linkId) {
+          
+          if (linkId && category) {
             await fetch('/api/links', {
               method: 'DELETE',
               headers: { 'Content-Type': 'application/json' },
@@ -291,7 +307,7 @@ export default function AILinkManager() {
           <div className="text-center sm:text-right">
             <h1 className="text-2xl md:text-3xl font-bold text-gray-950 flex items-center justify-center sm:justify-start gap-2">
               <Brain className="w-8 h-8 text-blue-600 animate-pulse" />
-              مدير الروابط بالذكاء الاصطناعي (Gemini AI)
+              مدير الروابط بالذكاء الاصطناعي (Gemma AI)
             </h1>
             <p className="text-gray-500 mt-1 text-sm">
               قم بإدارة وإضافة واستبدال روابط القنوات والمجموعات بسهولة عن طريق الأوامر النصية أو ملفات M3U.
@@ -367,12 +383,12 @@ export default function AILinkManager() {
               {loading ? (
                 <>
                   <RefreshCw className="w-5 h-5 animate-spin mr-2" />
-                  جاري تحليل البيانات مع Gemini...
+                  جاري تنفيذ التعديلات مع Gemma...
                 </>
               ) : (
                 <>
                   <Sparkles className="w-5 h-5 mr-2" />
-                  تحليل البيانات بالذكاء الاصطناعي
+                  تحليل وتطبيق التعديلات بالذكاء الاصطناعي
                 </>
               )}
             </Button>
