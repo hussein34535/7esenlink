@@ -143,8 +143,9 @@ export default function AILinkManager() {
     }
   };
 
-  const handleApply = async (actionsToApply?: AIOperation[]) => {
-    const targetActions = actionsToApply || actions;
+  const handleApply = async (actionsToApply?: AIOperation[] | any) => {
+    const isArray = Array.isArray(actionsToApply);
+    const targetActions = isArray ? actionsToApply : actions;
     if (!targetActions || targetActions.length === 0) return;
 
     setExecuting(true);
@@ -468,7 +469,7 @@ export default function AILinkManager() {
               </div>
               
               <Button
-                onClick={handleApply}
+                onClick={() => handleApply()}
                 disabled={executing}
                 className="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold"
               >
