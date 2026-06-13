@@ -154,15 +154,16 @@ export default function AILinkManager() {
     try {
       for (const action of targetActions) {
         if (action.type === 'CREATE_CATEGORY' && action.categoryName) {
-          await fetch('/api/links/categories', {
+          const res = await fetch('/api/links/categories', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ name: action.categoryName })
           });
+          if (!res.ok) throw new Error(await res.text());
         } 
         
         else if (action.type === 'CREATE_LINK' && action.linkName) {
-          await fetch('/api/links', {
+          const res = await fetch('/api/links', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -171,6 +172,7 @@ export default function AILinkManager() {
               category: action.categoryName || 'Uncategorized'
             })
           });
+          if (!res.ok) throw new Error(await res.text());
         } 
         
         else if (action.type === 'UPDATE_LINK_URL' && action.originalUrl) {
@@ -179,7 +181,7 @@ export default function AILinkManager() {
           
           const match = currentLinks.find((l: any) => 
             (linkId && l.id === linkId) || 
-            (!linkId && action.linkName && l.name.toLowerCase() === action.linkName.toLowerCase())
+            (!linkId && action.linkName && l.name?.toLowerCase() === action.linkName.toLowerCase())
           );
           
           if (match) {
@@ -188,7 +190,7 @@ export default function AILinkManager() {
           }
           
           if (linkId && category) {
-            await fetch(`/api/links/${linkId}`, {
+            const res = await fetch(`/api/links/${linkId}`, {
               method: 'PATCH',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ 
@@ -196,6 +198,7 @@ export default function AILinkManager() {
                 category: category 
               })
             });
+            if (!res.ok) throw new Error(await res.text());
           }
         } 
         
@@ -205,7 +208,7 @@ export default function AILinkManager() {
           
           const match = currentLinks.find((l: any) => 
             (linkId && l.id === linkId) || 
-            (!linkId && action.linkName && l.name.toLowerCase() === action.linkName.toLowerCase())
+            (!linkId && action.linkName && l.name?.toLowerCase() === action.linkName.toLowerCase())
           );
           
           if (match) {
@@ -214,41 +217,44 @@ export default function AILinkManager() {
           }
           
           if (linkId && category) {
-            await fetch('/api/links', {
+            const res = await fetch('/api/links', {
               method: 'DELETE',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 linksToDelete: [{ id: linkId, category }]
               })
             });
+            if (!res.ok) throw new Error(await res.text());
           }
         } 
         
         else if (action.type === 'REPLACE_CATEGORY_LINKS' && action.categoryName) {
           // Delete current links in category
           const linksToDelete = currentLinks
-            .filter((l: any) => l.category.toLowerCase() === action.categoryName.toLowerCase())
+            .filter((l: any) => l.category?.toLowerCase() === action.categoryName?.toLowerCase())
             .map((l: any) => ({ id: l.id, category: l.category }));
           
           if (linksToDelete.length > 0) {
-            await fetch('/api/links', {
+            const res = await fetch('/api/links', {
               method: 'DELETE',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ linksToDelete })
             });
+            if (!res.ok) throw new Error(await res.text());
           }
 
           // Ensure category exists
-          await fetch('/api/links/categories', {
+          const resCat = await fetch('/api/links/categories', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ name: action.categoryName })
           });
+          if (!resCat.ok) throw new Error(await resCat.text());
 
           // Create new links
           if (action.links && action.links.length > 0) {
             for (const ch of action.links) {
-              await fetch('/api/links', {
+              const resLink = await fetch('/api/links', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -257,6 +263,7 @@ export default function AILinkManager() {
                   category: action.categoryName
                 })
               });
+              if (!resLink.ok) throw new Error(await resLink.text());
             }
           }
         }
