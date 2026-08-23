@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { toast } from "sonner"
-import { Loader2, Search, Copy, Trash2, Plus, X, Edit2, ArrowUp, ArrowDown, Save, Pen, PlayCircle } from "lucide-react"
+import { Loader2, Search, Copy, Trash2, Plus, X, Edit2, ArrowUp, ArrowDown, Save, Pen, PlayCircle, GripVertical } from "lucide-react"
 import Link from "next/link"
 import Hls from "hls.js"
 import {
@@ -433,6 +433,26 @@ export default function Home() {
         }
     }
 
+    // Drag state for Manage Categories modal
+    const [dragCatIndex, setDragCatIndex] = useState<number | null>(null)
+
+    const handleCatDragStart = (index: number) => setDragCatIndex(index)
+    const handleCatDragOver = (e: React.DragEvent) => e.preventDefault()
+    const handleCatDrop = (targetIndex: number) => {
+        if (dragCatIndex === null || dragCatIndex === targetIndex) return
+        const newCategories = [...categories]
+        const [moved] = newCategories.splice(dragCatIndex, 1)
+        newCategories.splice(targetIndex, 0, moved)
+        setCategories(newCategories)
+        setDragCatIndex(null)
+        // Save order
+        fetch('/api/links/categories', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(newCategories)
+        }).catch(() => toast.error('Failed to save order'))
+    }
+
     const m3uPlaceholder = `#EXTM3U
 #EXTINF:-1 tvg-id="SomeChannel" tvg-name="Some Channel Name" group-title="News",Some Channel Name
 http://example.com/stream1
@@ -790,11 +810,21 @@ http://example.com/stream3
                             Rename or reorder your existing categories. Changes apply to all links in the category.
                         </DialogDescription>
                     </DialogHeader>
-                    <div className="grid gap-4 py-4 max-h-[60vh] overflow-y-auto">
+                    <div className="grid gap-1 py-4 max-h-[60vh] overflow-y-auto">
                         {categories.filter(c => c !== 'uncategorized').map((cat, index) => (
-                            <div key={cat} className="flex flex-col gap-2 p-2 border rounded">
+                            <div
+                                key={cat}
+                                draggable
+                                onDragStart={() => handleCatDragStart(index)}
+                                onDragOver={(e) => handleCatDragOver(e)}
+                                onDrop={() => handleCatDrop(index)}
+                                className={`flex items-center gap-2 p-2 border rounded cursor-grab active:cursor-grabbing transition-colors ${
+                                    dragCatIndex === index ? "bg-blue-50 opacity-50" : "hover:bg-muted/50"
+                                }`}
+                            >
+                                <GripVertical className="h-4 w-4 text-muted-foreground shrink-0" />
                                 {editingCategory === cat ? (
-                                    <div className="flex items-center gap-2">
+                                    <div className="flex items-center gap-2 flex-1">
                                         <Input
                                             value={editCategoryName}
                                             onChange={(e) => setEditCategoryName(e.target.value)}
@@ -804,23 +834,9 @@ http://example.com/stream3
                                         <Button size="sm" variant="ghost" onClick={() => setEditingCategory(null)}>Cancel</Button>
                                     </div>
                                 ) : (
-                                    <div className="flex justify-between items-center group">
-                                        <span className="font-medium text-sm">{cat}</span>
-                                        <div className="flex gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
-                                            <Button
-                                                variant="ghost" size="icon" className="h-7 w-7"
-                                                onClick={() => handleMoveCategory(index, 'up')}
-                                                disabled={index === 0 || isActionLoading}
-                                            >
-                                                <ArrowUp className="h-4 w-4" />
-                                            </Button>
-                                            <Button
-                                                variant="ghost" size="icon" className="h-7 w-7"
-                                                onClick={() => handleMoveCategory(index, 'down')}
-                                                disabled={index === categories.length - 1 || isActionLoading}
-                                            >
-                                                <ArrowDown className="h-4 w-4" />
-                                            </Button>
+                                    <>
+                                        <span className="font-medium text-sm flex-1">{cat}</span>
+                                        <div className="flex gap-1 shrink-0">
                                             <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => startEditingCategory(cat)}>
                                                 <Edit2 className="h-4 w-4" />
                                             </Button>
@@ -828,7 +844,7 @@ http://example.com/stream3
                                                 <Trash2 className="h-4 w-4 text-destructive" />
                                             </Button>
                                         </div>
-                                    </div>
+                                    </>
                                 )}
                             </div>
                         ))}
