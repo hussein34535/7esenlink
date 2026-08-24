@@ -379,6 +379,15 @@ export default function Home() {
         }
     }
 
+    // Pagination for links table
+    const [page, setPage] = useState(1)
+    const PAGE_SIZE = 50
+    const totalPages = Math.ceil(filteredLinks.length / PAGE_SIZE)
+    const paginatedLinks = filteredLinks.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+
+    // Reset page when filters change
+    useEffect(() => { setPage(1) }, [searchQuery, selectedCategoryFilter])
+
     // State for Category Management
     const [editingCategory, setEditingCategory] = useState<string | null>(null)
     const [editCategoryName, setEditCategoryName] = useState("")
@@ -435,6 +444,8 @@ export default function Home() {
 
     // Drag state for Manage Categories modal
     const [dragCatIndex, setDragCatIndex] = useState<number | null>(null)
+    const [catDisplayLimit, setCatDisplayLimit] = useState(20)
+    const CAT_STEP = 20
 
     const handleCatDragStart = (index: number) => setDragCatIndex(index)
     const handleCatDragOver = (e: React.DragEvent) => e.preventDefault()
@@ -639,8 +650,8 @@ http://example.com/stream3
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {filteredLinks.length > 0 ? (
-                                    filteredLinks.map((link) => {
+                                {paginatedLinks.length > 0 ? (
+                                    paginatedLinks.map((link) => {
                                         const fullConvertedUrl = baseUrl ? `${baseUrl}${link.converted}` : link.converted;
                                         const isSelected = selectedLinks.includes(`${link.category}-${link.id}`);
 
@@ -759,6 +770,30 @@ http://example.com/stream3
                                 )}
                             </TableBody>
                         </Table>
+                        {/* Pagination */}
+                        {totalPages > 1 && (
+                            <div className="flex items-center justify-between px-4 py-3 border-t">
+                                <span className="text-sm text-muted-foreground">
+                                    {(page - 1) * PAGE_SIZE + 1}-{Math.min(page * PAGE_SIZE, filteredLinks.length)} of {filteredLinks.length}
+                                </span>
+                                <div className="flex items-center gap-1">
+                                    <Button variant="outline" size="sm" onClick={() => setPage(1)} disabled={page === 1}>First</Button>
+                                    <Button variant="outline" size="sm" onClick={() => setPage(page - 1)} disabled={page === 1}>Prev</Button>
+                                    {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                                        const start = Math.max(1, page - 2)
+                                        const num = start + i
+                                        if (num > totalPages) return null
+                                        return (
+                                            <Button key={num} variant={num === page ? "default" : "outline"} size="sm" onClick={() => setPage(num)} className="w-9">
+                                                {num}
+                                            </Button>
+                                        )
+                                    })}
+                                    <Button variant="outline" size="sm" onClick={() => setPage(page + 1)} disabled={page === totalPages}>Next</Button>
+                                    <Button variant="outline" size="sm" onClick={() => setPage(totalPages)} disabled={page === totalPages}>Last</Button>
+                                </div>
+                            </div>
+                        )}
                     </CardContent>
                 </Card>
             )}
@@ -811,7 +846,7 @@ http://example.com/stream3
                         </DialogDescription>
                     </DialogHeader>
                     <div className="grid gap-1 py-4 max-h-[60vh] overflow-y-auto">
-                        {categories.filter(c => c !== 'uncategorized').map((cat, index) => (
+                        {categories.filter(c => c !== 'uncategorized').slice(0, catDisplayLimit).map((cat, index) => (
                             <div
                                 key={cat}
                                 draggable
@@ -848,6 +883,17 @@ http://example.com/stream3
                                 )}
                             </div>
                         ))}
+                        {categories.filter(c => c !== 'uncategorized').length > catDisplayLimit && (
+                            <div className="flex gap-2 justify-center pt-2">
+                                <Button variant="outline" size="sm" onClick={() => setCatDisplayLimit(catDisplayLimit + CAT_STEP)}>
+                                    Show {Math.min(CAT_STEP, categories.filter(c => c !== 'uncategorized').length - catDisplayLimit)} More
+                                </Button>
+                                <Button variant="ghost" size="sm" onClick={() => setCatDisplayLimit(categories.filter(c => c !== 'uncategorized').length)}>
+                                    Show All ({categories.filter(c => c !== 'uncategorized').length})
+                                </Button>
+                            </div>
+                        )}
+                    </div>
                     </div>
                     <DialogFooter><DialogClose asChild><Button variant="secondary">Close</Button></DialogClose></DialogFooter>
                 </DialogContent>
