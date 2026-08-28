@@ -381,9 +381,9 @@ export default function Home() {
 
     // Pagination for links table
     const [page, setPage] = useState(1)
-    const PAGE_SIZE = 50
-    const totalPages = Math.ceil(filteredLinks.length / PAGE_SIZE)
-    const paginatedLinks = filteredLinks.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+    const [pageSize, setPageSize] = useState(20)
+    const totalPages = Math.ceil(filteredLinks.length / pageSize)
+    const paginatedLinks = filteredLinks.slice((page - 1) * pageSize, page * pageSize)
 
     // Reset page when filters change
     useEffect(() => { setPage(1) }, [searchQuery, selectedCategoryFilter])
@@ -774,23 +774,35 @@ http://example.com/stream3
                         {totalPages > 1 && (
                             <div className="flex items-center justify-between px-4 py-3 border-t">
                                 <span className="text-sm text-muted-foreground">
-                                    {(page - 1) * PAGE_SIZE + 1}-{Math.min(page * PAGE_SIZE, filteredLinks.length)} of {filteredLinks.length}
+                                    {(page - 1) * pageSize + 1}-{Math.min(page * pageSize, filteredLinks.length)} of {filteredLinks.length}
                                 </span>
-                                <div className="flex items-center gap-1">
-                                    <Button variant="outline" size="sm" onClick={() => setPage(1)} disabled={page === 1}>First</Button>
-                                    <Button variant="outline" size="sm" onClick={() => setPage(page - 1)} disabled={page === 1}>Prev</Button>
-                                    {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                                        const start = Math.max(1, page - 2)
-                                        const num = start + i
-                                        if (num > totalPages) return null
-                                        return (
-                                            <Button key={num} variant={num === page ? "default" : "outline"} size="sm" onClick={() => setPage(num)} className="w-9">
-                                                {num}
-                                            </Button>
-                                        )
-                                    })}
-                                    <Button variant="outline" size="sm" onClick={() => setPage(page + 1)} disabled={page === totalPages}>Next</Button>
-                                    <Button variant="outline" size="sm" onClick={() => setPage(totalPages)} disabled={page === totalPages}>Last</Button>
+                                <div className="flex items-center gap-2">
+                                    <div className="flex items-center gap-1">
+                                        <Button variant="outline" size="sm" onClick={() => setPage(1)} disabled={page === 1}>First</Button>
+                                        <Button variant="outline" size="sm" onClick={() => setPage(page - 1)} disabled={page === 1}>Prev</Button>
+                                        {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                                            const start = Math.max(1, page - 2)
+                                            const num = start + i
+                                            if (num > totalPages) return null
+                                            return (
+                                                <Button key={num} variant={num === page ? "default" : "outline"} size="sm" onClick={() => setPage(num)} className="w-9">
+                                                    {num}
+                                                </Button>
+                                            )
+                                        })}
+                                        <Button variant="outline" size="sm" onClick={() => setPage(page + 1)} disabled={page === totalPages}>Next</Button>
+                                        <Button variant="outline" size="sm" onClick={() => setPage(totalPages)} disabled={page === totalPages}>Last</Button>
+                                    </div>
+                                    <Select value={String(pageSize)} onValueChange={(value) => { setPageSize(Number(value)); setPage(1) }}>
+                                        <SelectTrigger className="h-8 w-[100px] text-xs">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="20">20 / page</SelectItem>
+                                            <SelectItem value="50">50 / page</SelectItem>
+                                            <SelectItem value="100">100 / page</SelectItem>
+                                        </SelectContent>
+                                    </Select>
                                 </div>
                             </div>
                         )}
@@ -893,7 +905,6 @@ http://example.com/stream3
                                 </Button>
                             </div>
                         )}
-                    </div>
                     </div>
                     <DialogFooter><DialogClose asChild><Button variant="secondary">Close</Button></DialogClose></DialogFooter>
                 </DialogContent>

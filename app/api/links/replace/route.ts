@@ -22,9 +22,11 @@ export async function POST(req: Request) {
       if (!snap.exists()) continue;
 
       const links = snap.val();
-      const entries = Array.isArray(links)
-        ? links.map((link, idx) => [idx, link])
-        : Object.entries<any>(links || {});
+      const entries = (
+        Array.isArray(links)
+          ? links.map((link, idx) => [idx, link])
+          : Object.entries<any>(links || {})
+      ).filter(Boolean);
 
       for (const [id, link] of entries) {
         if (!link) continue;

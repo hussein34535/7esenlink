@@ -130,7 +130,7 @@ export default function CategoriesPage() {
                   onDragOver={(e) => e.preventDefault()}
                   onDrop={() => handleDrop(index)}
                   className={`flex items-center gap-3 px-4 py-3 cursor-grab active:cursor-grabbing transition-colors ${
-                    draggedIndex === index ? "bg-blue-50 opacity-50" : "hover:bg-muted/50"
+                    draggedIndex === index ? "bg-accent opacity-50" : "hover:bg-muted/50"
                   }`}
                 >
                   <GripVertical className="h-5 w-5 text-muted-foreground shrink-0" />
