@@ -68,7 +68,7 @@
 | shahid | 2 | Shahid Sports 1-2 فقط |
 | shahid 4k | 6 | Shahid Spot1-5 4k + EVENT 4k |
 | ad sport | 5 | زي ما هي |
-| egypt | 11 | رياضي فقط (أهلي/زمالك/ON/Bally/Nile/Sony Ten) |
+| egypt | 14 | رياضي + MBC Action/Masr/Masr 2 (بتعرض مباريات أحيانًا) |
 | egypt 4k | 1 | ON SPORTS MAX 4K |
 | egypt hd | 1 | ON SPORTS PLUS HD |
 | alkass hd | 10 | زي ما هي |
@@ -80,7 +80,7 @@
 | sky | 42 | رياضي فقط (Sky Sports/Football/F1/Calcio) |
 | sky hd | 2 | Bundesliga + Austria HD |
 
-الإجمالي: 208 لينك رياضي في 21 فئة (بعد حذف 153 لينك ترفيهي في 2026-08-29).
+الإجمالي: 211 لينك في 21 فئة (208 رياضي + 3 قنوات مصرية بتعرض مباريات أحيانًا: MBC Action/Masr/Masr 2 — استُرجعت من الباك أب 2026-08-29).
 ## 5) السيرفر والدومين
 
 - كل لينكات original بتشاور على https://live.7esentv.com/sports-api/... (شهادة Let's Encrypt سليمة لحد نوفمبر 2026).
@@ -154,3 +154,5 @@
 - حالات حديثية اتفق عليها: ثمانية 4K/HD و Shahid EVENT 4k و Sony Ten رياضية فاتسابوا.
 - الباك أب قبل العملية: db-backup-2026-08-28T23-34-34.json (فيه كل حاجة قبل الحذف - الملفات دي local فقط ومش بتترفع على GitHub).
 - لو استيراد M3U جديد: فلتر أسماء القنوات قبل الإضافة — الرياضة بس (نفس أنماط القسمين 10 و11).
+
+- استثناء صاحب المشروع (2026-08-29): MBC Action و MBC Masr و MBC Masr 2 اترجعوا لفئة egypt لأن مصر أحيانًا بتعرض مباريات.
