@@ -85,9 +85,15 @@ export async function GET(
         return new Response('TOKEN-EXPIRED', { status: 403 });
       }
 
-      // Session check + heartbeat on the 7esen backend (owns single-session state).
+      // Session check + heartbeat on the 7esen backend (owns session state).
+      // dv (deviceId) is forwarded when present so the backend can verify the
+      // session belongs to the requesting device.
       try {
-        const checkUrl = `${internalBase.replace(/\/+$/, '')}/api/internal/session-check?tk=${encodeURIComponent(tk)}&sid=${encodeURIComponent(sid)}`;
+        const dv = new URL(req.url).searchParams.get('dv');
+        let checkUrl = `${internalBase.replace(/\/+$/, '')}/api/internal/session-check?tk=${encodeURIComponent(tk)}&sid=${encodeURIComponent(sid)}`;
+        if (dv) {
+          checkUrl += `&dv=${encodeURIComponent(dv)}`;
+        }
         const res = await fetch(checkUrl, {
           headers: { 'x-internal-secret': internalSecret },
           cache: 'no-store',
