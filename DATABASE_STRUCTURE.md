@@ -156,3 +156,23 @@
 - لو استيراد M3U جديد: فلتر أسماء القنوات قبل الإضافة — الرياضة بس (نفس أنماط القسمين 10 و11).
 
 - استثناء صاحب المشروع (2026-08-29): MBC Action و MBC Masr و MBC Masr 2 اترجعوا لفئة egypt لأن مصر أحيانًا بتعرض مباريات.
+
+## 12) مزامنة سيرفر XUI (2026-08-29)
+
+البنية دلوقتي: سيرفر 193.233.219.4 بيدير 3 مصادر رياضية (GENRAL + PRIME + OSCAR) عبر /root/sports_api.py (خدمة sports-api على بورت 8088 خلف Nginx على https://live.7esentv.com/sports-api).
+
+السكريبتات على السيرفر:
+- /root/sports_api.py - خادم Xtream API + M3U. عند كل refresh بيقرا: OSCAR من /root/oscar_sports.json (ثابت) + PRIME من /root/prime_sports.json + GENRAL من API التطبيق بتوكينات طازجة.
+- /root/prime_sync.py (جديد - اتضاف 2026-08-29) - بيقرا Firebase Remote Config الحية بنفس نداء تطبيق PrimeTV 1.7.1 (مشروع primetv-ott) عشان يجيب رابط PocketBase الحالي، وبعدين بيسحب القنوات الرياضية ويكتب /root/prime_sports.json. التشغيل: python3 /root/prime_sync.py refresh (بياخذ 2-5 دقائق بسبب 500s متكررة من PB - فيه retries جاهزة).
+- /root/sports_sync.py + sports-refresh.timer - التحديث الدوري كل 90 دقيقة.
+- /root/catmap_guard.py - بيصلح category_map بتاع XUI.
+
+الداتا بعد المزامنة: 297 قناة (GENRAL 60 + PRIME 192 + OSCAR 45). بعدها فلترة رياضي-فقط نقلت 250 ل 7esenlink Firebase (23 فئة بنطام الجودات)، وبعد تنظيف 8 تسريبات ترفيهية: 242 لينك في 23 فئة.
+
+قنوات GENRAL في الداتابيز متخزنة بشكل مختلف: بدل original فيها حقل genral = {host, id, key, ip} وoriginal=genral://<id> كعلامة. السبب: روابط GENRAL توكنات بتتبنى لحظياً (SHA1 بتوقيت) - فلازم route الـ stream يبني التوكين لحظة الطلب (نفس منطق to4_url في sports_api.py). روابط PRIME وOSCAR عادية (original مباشر + ua/ref لو مطلوبين).
+
+مهم للي بعدك:
+- لو PocketBase اتغير: prime_sync.py بيجيب الرابط الجديد اوتوماتيك من Remote Config - مش محتاج تعديل.
+- لو حابب تحدث القنوات: شغل على السيرفر python3 /root/prime_sync.py refresh && python3 /root/sports_api.py refresh، وبعدين إعادة سكربت المزامنة ل Firebase.
+- get.php بقى بيرجع 403 forbidden من خارج السيرفر من غير UA معين - جوا السيرفر شغال.
+- الباك أب قبل المزامنة: db-backup-2026-08-29T15-56-59.json.
