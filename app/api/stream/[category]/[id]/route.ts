@@ -52,71 +52,78 @@ export async function GET(
         return new Response('TOKEN-SYSTEM-MISCONFIGURED', { status: 500 });
       }
 
-      const tk = new URL(req.url).searchParams.get('tk');
-      const sid = new URL(req.url).searchParams.get('sid');
-      if (!tk || !sid) {
+      const searchParams = new URL(req.url).searchParams;
+      const tk = searchParams.get('tk');
+      const sid = searchParams.get('sid');
+      const master = searchParams.get('master');
+
+      // Owner master bypass: a single secret that skips the whole ticket flow.
+      const ownerToken = process.env.OWNER_MASTER_TOKEN;
+      let ownerBypass = false;
+      if (ownerToken && master) {
+        const a = Buffer.from(ownerToken);
+        const b = Buffer.from(master);
+        ownerBypass = a.length === b.length && timingSafeEqual(a, b);
+      }
+      if (!ownerBypass && (!tk || !sid)) {
         return new Response('TOKEN-MISSING', { status: 403 });
       }
 
-      const parts = tk.split('.');
-      if (parts.length !== 4) {
-        return new Response('TOKEN-MALFORMED', { status: 403 });
-      }
-      const [uidB64, devB64, dayStr, sigHex] = parts;
-      const day = parseInt(dayStr, 10);
-      if (!Number.isFinite(day)) {
-        return new Response('TOKEN-MALFORMED', { status: 403 });
-      }
-
-      // Timing-safe HMAC re-computation over the decoded uid/deviceId.
-      const uid = b64urlDecode(uidB64);
-      const deviceId = b64urlDecode(devB64);
-      const expected = createHmac('sha256', tokenSecret)
-        .update(`${uid}.${deviceId}.${dayStr}`)
-        .digest('hex');
-      const a = Buffer.from(sigHex, 'hex');
-      const b = Buffer.from(expected, 'hex');
-      if (a.length !== b.length || !timingSafeEqual(a, b)) {
-        return new Response('TOKEN-BAD-SIGNATURE', { status: 403 });
-      }
-
-      // 24h rotation: token only valid on its issue day (UTC).
-      if (day !== Math.floor(Date.now() / DAY_MS)) {
-        return new Response('TOKEN-EXPIRED', { status: 403 });
-      }
-
-      // Session check + heartbeat on the 7esen backend (owns session state).
-      // dv (deviceId) is forwarded when present so the backend can verify the
-      // session belongs to the requesting device.
-      try {
-        const dv = new URL(req.url).searchParams.get('dv');
-        let checkUrl = `${internalBase.replace(/\/+$/, '')}/api/internal/session-check?tk=${encodeURIComponent(tk)}&sid=${encodeURIComponent(sid)}`;
-        if (dv) {
-          checkUrl += `&dv=${encodeURIComponent(dv)}`;
+      if (!ownerBypass) {
+        const parts = tk!.split('.');
+        if (parts.length !== 4) {
+          return new Response('TOKEN-MALFORMED', { status: 403 });
         }
-        const res = await fetch(checkUrl, {
-          headers: { 'x-internal-secret': internalSecret },
-          cache: 'no-store',
-          signal: AbortSignal.timeout(5000),
-        });
-        let active = false;
-        let reason = 'SESSION-INVALID';
+        const [uidB64, devB64, dayStr, sigHex] = parts;
+        const day = parseInt(dayStr, 10);
+        if (!Number.isFinite(day)) {
+          return new Response('TOKEN-MALFORMED', { status: 403 });
+        }
+
+        const uid = b64urlDecode(uidB64);
+        const deviceId = b64urlDecode(devB64);
+        const expected = createHmac('sha256', tokenSecret)
+          .update(`${uid}.${deviceId}.${dayStr}`)
+          .digest('hex');
+        const a = Buffer.from(sigHex, 'hex');
+        const b = Buffer.from(expected, 'hex');
+        if (a.length !== b.length || !timingSafeEqual(a, b)) {
+          return new Response('TOKEN-BAD-SIGNATURE', { status: 403 });
+        }
+
+        if (day !== Math.floor(Date.now() / DAY_MS)) {
+          return new Response('TOKEN-EXPIRED', { status: 403 });
+        }
+
         try {
-          const data = await res.json();
-          if (data?.active === true) {
-            active = true;
-          } else if (typeof data?.reason === 'string' && data.reason) {
-            reason = data.reason.replace(/_/g, '-');
+          const dv = searchParams.get('dv');
+          let checkUrl = `${internalBase.replace(/\/+$/, '')}/api/internal/session-check?tk=${encodeURIComponent(tk!)}&sid=${encodeURIComponent(sid!)}`;
+          if (dv) {
+            checkUrl += `&dv=${encodeURIComponent(dv)}`;
+          }
+          const res = await fetch(checkUrl, {
+            headers: { 'x-internal-secret': internalSecret },
+            cache: 'no-store',
+            signal: AbortSignal.timeout(5000),
+          });
+          let active = false;
+          let reason = 'SESSION-INVALID';
+          try {
+            const data = await res.json();
+            if (data?.active === true) {
+              active = true;
+            } else if (typeof data?.reason === 'string' && data.reason) {
+              reason = data.reason.replace(/_/g, '-');
+            }
+          } catch {
+            // Non-JSON response -> keep default reason.
+          }
+          if (!active) {
+            return new Response(`TOKEN-${reason}`, { status: 403 });
           }
         } catch {
-          // Non-JSON response → keep default reason.
+          return new Response('TOKEN-SESSION-INVALID', { status: 403 });
         }
-        if (!active) {
-          return new Response(`TOKEN-${reason}`, { status: 403 });
-        }
-      } catch {
-        // Backend unreachable / timeout → fail closed.
-        return new Response('TOKEN-SESSION-INVALID', { status: 403 });
       }
     }
 
