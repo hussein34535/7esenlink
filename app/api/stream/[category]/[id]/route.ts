@@ -21,6 +21,80 @@ function b64urlDecode(value: string): string {
   return Buffer.from(value, 'base64url').toString('utf8');
 }
 
+// Dashboard/admin URLs use short category names (e.g. "BEIN SPORT", "ALWAN",
+// "STC TV") while Firebase keys use full names ("beIN SPORTS", "ALWAN SPORTS",
+// "STC SPORTS"). Resolve the real node by trying aliases + case/plural variants.
+const CATEGORY_ALIASES: Record<string, string> = {
+  'bein sport': 'beIN SPORTS',
+  'bein sports': 'beIN SPORTS',
+  'alwan': 'ALWAN SPORTS',
+  'alwan sports': 'ALWAN SPORTS',
+  'stc tv': 'STC SPORTS',
+  'stc': 'STC SPORTS',
+  'stc sports': 'STC SPORTS',
+  'dazn': 'DAZN SPORTS',
+  'dazn sports': 'DAZN SPORTS',
+  'shahid': 'SHAHID SPORTS',
+  'shahid sports': 'SHAHID SPORTS',
+  'starzplay': 'STARZPLAY SPORTS',
+  'starzplay sports': 'STARZPLAY SPORTS',
+  'sky': 'SKY SPORTS',
+  'sky sports': 'SKY SPORTS',
+  'on sports': 'ON SPORTS',
+  'on sport': 'ON SPORTS',
+  'arab sports': 'ARAB SPORTS',
+  'arab sport': 'ARAB SPORTS',
+  'ad sport': 'AD SPORTS',
+  'ad sports': 'AD SPORTS',
+  'alkass': 'ALKASS SPORTS',
+  'alkass sports': 'ALKASS SPORTS',
+  'alkass hd': 'ALKASS SPORTS',
+  'max sports': 'MAX SPORTS',
+  'max sport': 'MAX SPORTS',
+  'kurdish sports': 'KURDISH SPORTS',
+  'kurdish sport': 'KURDISH SPORTS',
+  'egyptian clubs': 'EGYPTIAN CLUBS',
+  'egypt': 'EGYPTIAN CLUBS',
+  'thamanya sports': 'THAMANYA SPORTS',
+  'thamanya sport': 'THAMANYA SPORTS',
+  'tnt sports': 'TNT SPORTS',
+  'tnt sport': 'TNT SPORTS',
+  'vip sports': 'VIP SPORTS',
+  'vip sport': 'VIP SPORTS',
+  'wwe': 'WWE',
+  'sport tv': 'SPORT TV',
+};
+
+async function resolveStreamNode(db: FirebaseFirestoreLike, category: string, id: string): Promise<{ key: string; val: unknown } | null> {
+  const norm = category.trim();
+  const candidates: string[] = [norm];
+  const alias = CATEGORY_ALIASES[norm.toLowerCase()];
+  if (alias) candidates.unshift(alias);
+  candidates.push(
+    norm.toUpperCase(),
+    norm.toLowerCase(),
+    `${norm} SPORTS`,
+    `${norm.toUpperCase()} SPORTS`,
+  );
+  const seen = new Set<string>();
+  for (const cand of candidates.slice(0, 8)) {
+    if (!cand || seen.has(cand)) continue;
+    seen.add(cand);
+    try {
+      const snap = await db.ref(`/${cand}/${id}`).once('value');
+      if (snap.exists()) return { key: cand, val: snap.val() };
+    } catch {
+      // try next candidate
+    }
+  }
+  return null;
+}
+
+// Minimal structural type for the Firebase Admin DB handle used here.
+type FirebaseFirestoreLike = {
+  ref: (path: string) => { once: (event: string) => Promise<{ exists: () => boolean; val: () => unknown }> };
+};
+
 function buildGenralUrl(g: { host?: string; id?: string; hid?: string; key?: string; hkey?: string; ip?: string }): string | null {
   const host = g.host ? String(g.host).replace(/\/+$/, '') : null;
   const hid = g.id ? String(g.id) : g.hid ? String(g.hid) : null;
@@ -128,13 +202,13 @@ export async function GET(
     }
 
     const db = getAdminDB();
-    const snapshot = await db.ref(`/${category}/${id}`).once('value');
+    const resolved = await resolveStreamNode(db as unknown as FirebaseFirestoreLike, category, id);
 
-    if (!snapshot.exists()) {
+    if (!resolved) {
       return new Response('Stream Not Found', { status: 404 });
     }
 
-    const link = snapshot.val();
+    const link = resolved.val as { original?: string; genral?: unknown } | null;
     if (!link?.original) {
       return new Response('Stream Not Found', { status: 404 });
     }
