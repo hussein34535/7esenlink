@@ -73,6 +73,25 @@ function proxyUrl(upstream: string): string {
   return `/api/proxy?url=${encodeURIComponent(upstream)}`;
 }
 
+// Stream URLs played from the admin dashboard often carry no auth params.
+// Since this route runs server-side (and holds the secret), attach the owner
+// master bypass automatically to /api/stream/* targets that lack tk/master.
+// Playlists rewritten through the proxy stay clean — the secret is re-attached
+// on every server-side fetch and never leaks to the client.
+function withMasterIfNeeded(target: string): string {
+  try {
+    const master = process.env.OWNER_MASTER_TOKEN;
+    if (!master) return target;
+    const u = new URL(target);
+    if (!u.pathname.startsWith('/api/stream/')) return target;
+    if (u.searchParams.has('tk') || u.searchParams.has('master')) return target;
+    u.searchParams.set('master', master);
+    return u.toString();
+  } catch {
+    return target;
+  }
+}
+
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const target = searchParams.get('url');
@@ -91,7 +110,8 @@ export async function GET(req: NextRequest) {
   if (range) forwardHeaders.Range = range;
 
   try {
-    const upstreamRes = await fetch(target, {
+    const upstreamTarget = withMasterIfNeeded(target);
+    const upstreamRes = await fetch(upstreamTarget, {
       headers: forwardHeaders,
       redirect: 'follow',
       cache: 'no-store',
