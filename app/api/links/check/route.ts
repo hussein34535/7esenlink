@@ -34,7 +34,9 @@ export async function POST(req: Request) {
           redirect: 'follow',
         });
         try { await res.body?.cancel(); } catch { /* ignore */ }
-        results[item.key] = res.status < 400 ? 'alive' : 'dead';
+        const ct = (res.headers.get('content-type') || '').toLowerCase();
+        const isStream = ct.includes('mpegurl') || ct.includes('m3u') || ct.includes('video') || ct.includes('mp2t') || ct.includes('octet-stream');
+        results[item.key] = res.status < 400 && isStream ? 'alive' : 'dead';
       } catch {
         results[item.key] = 'dead';
       }
