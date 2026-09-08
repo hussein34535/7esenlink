@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { toast } from "sonner"
-import { Loader2, Search, Copy, Trash2, Plus, X, Edit2, ArrowUp, ArrowDown, Save, Pen, PlayCircle, GripVertical } from "lucide-react"
+import { Loader2, Search, Copy, Trash2, Plus, X, Edit2, ArrowUp, ArrowDown, Save, Pen, PlayCircle, GripVertical, Activity, FolderInput } from "lucide-react"
 import Link from "next/link"
 import Hls from "hls.js"
 import {
@@ -66,6 +66,10 @@ export default function Home() {
     const [isManageCategoriesModalOpen, setIsManageCategoriesModalOpen] = useState(false)
     const [useProxy, setUseProxy] = useState(true)
     const [playingUrl, setPlayingUrl] = useState<string | null>(null)
+    const [linkStatus, setLinkStatus] = useState<Record<string, 'alive' | 'dead'>>({})
+    const [checking, setChecking] = useState(false)
+    const [checkedOnce, setCheckedOnce] = useState(false)
+    const [bulkCategory, setBulkCategory] = useState("")
 
     useEffect(() => {
         if (typeof window !== "undefined") {
@@ -160,38 +164,74 @@ export default function Home() {
         }
     }
 
-    const updateLinkCategory = async (linkId: number, originalCategory: string, newCategory: string) => {
+    const linkKey = (link: { category: string; id: number }) => `${link.category}-${link.id}`;
+
+    const handleBulkMove = async () => {
+        if (selectedLinks.length === 0 || !bulkCategory) {
+            toast.error('اختر روابط و وجهة أولاً');
+            return;
+        }
         setIsActionLoading(true);
-        const originalLinks = [...links];
-        setLinks(prevLinks =>
-            prevLinks.map(link =>
-                link.id === linkId && link.category === originalCategory
-                    ? { ...link, category: newCategory, converted: `/api/stream/${newCategory.toLowerCase()}/${link.id}` }
-                    : link
-            )
-        );
-
         try {
-            const response = await fetch(`/api/links/${linkId}`, {
-                method: 'PATCH',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ originalCategory, newCategory }),
-            })
-
-            if (!response.ok) {
-                throw new Error('Failed to update link category')
-            }
-            toast.success('Link category updated successfully')
+            const payload = selectedLinks.map(key => {
+                const idx = key.lastIndexOf('-');
+                return { id: parseInt(key.slice(idx + 1)), category: key.slice(0, idx) };
+            });
+            const response = await fetch('/api/links/move-category', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ links: payload, newCategory: bulkCategory }),
+            });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(data.error || 'Failed to move links');
+            const newCat = bulkCategory.toLowerCase();
+            setLinks(prev => prev.map(link =>
+                selectedLinks.includes(`${link.category}-${link.id}`)
+                    ? { ...link, category: newCat, converted: `/api/stream/${newCat}/${link.id}` }
+                    : link
+            ));
+            setSelectedLinks([]);
+            setBulkCategory("");
+            toast.success(`تم نقل ${data.moved} رابط إلى "${bulkCategory}"`);
+            await loadLinksAndCategories();
         } catch (err) {
-            console.error('Error updating category:', err);
-            toast.error(err instanceof Error ? err.message : 'Failed to update link category')
-            setLinks(originalLinks);
+            console.error('Error moving links:', err);
+            toast.error(err instanceof Error ? err.message : 'Failed to move links');
         } finally {
             setIsActionLoading(false);
         }
-    }
+    };
+
+    const handleCheckStreams = async () => {
+        if (checking) return;
+        const targets = filteredLinks
+            .filter(l => l.original && /^https?:\/\//i.test(l.original))
+            .map(l => ({ key: `${l.category}-${l.id}`, url: l.original }));
+        if (targets.length === 0) {
+            toast.error('لا يوجد روابط للفحص');
+            return;
+        }
+        setChecking(true);
+        try {
+            const response = await fetch('/api/links/check', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ items: targets }),
+            });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(data.error || 'Check failed');
+            setLinkStatus(prev => ({ ...prev, ...(data.results || {}) }));
+            setCheckedOnce(true);
+            const vals = Object.values((data.results || {}) as Record<string, string>);
+            const alive = vals.filter(v => v === 'alive').length;
+            toast.success(`يعمل: ${alive} / لا يعمل: ${vals.length - alive}`);
+        } catch (err) {
+            console.error('Error checking streams:', err);
+            toast.error(err instanceof Error ? err.message : 'Check failed');
+        } finally {
+            setChecking(false);
+        }
+    };
 
     const copyToClipboard = async (text: string) => {
         if (!text) {
@@ -537,6 +577,17 @@ http://example.com/stream3
                     </Button>
 
                     <Button
+                        variant="outline"
+                        className="bg-background flex-grow"
+                        onClick={handleCheckStreams}
+                        disabled={checking || isActionLoading}
+                        title="فحص سريع: بايت واحد فقط لكل رابط"
+                    >
+                        {checking ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Activity className="h-4 w-4 mr-2" />}
+                        {checking ? 'جارٍ الفحص...' : 'فحص الروابط'}
+                    </Button>
+
+                    <Button
                         variant={showFindReplace ? "secondary" : "outline"}
                         className={`bg-background flex-grow ${showFindReplace ? "text-secondary-foreground hover:bg-secondary/80" : ""}`}
                         onClick={() => setShowFindReplace(!showFindReplace)}
@@ -604,7 +655,7 @@ http://example.com/stream3
                                 {selectedLinks.length} link{selectedLinks.length === 1 ? '' : 's'} selected
                             </span>
                         </div>
-                        <div className="flex flex-wrap gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
                             <Button
                                 variant="outline"
                                 size="sm"
@@ -613,6 +664,30 @@ http://example.com/stream3
                             >
                                 Update Selected URLs
                             </Button>
+                            <div className="flex items-center gap-1.5 pl-2 ml-1 border-l border-border/60">
+                                <FolderInput className="h-3.5 w-3.5 text-muted-foreground" />
+                                <Select value={bulkCategory} onValueChange={setBulkCategory} disabled={isActionLoading}>
+                                    <SelectTrigger className="w-[130px] h-8 text-xs bg-background border border-input">
+                                        <SelectValue placeholder="نقل إلى..." />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {categories.map((category) => (
+                                            <SelectItem key={category} value={category}>
+                                                {category}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={handleBulkMove}
+                                    disabled={isActionLoading || !bulkCategory}
+                                    className="h-8 text-xs text-muted-foreground hover:text-foreground"
+                                >
+                                    نقل
+                                </Button>
+                            </div>
                             <Button
                                 variant="destructive"
                                 size="sm"
@@ -644,7 +719,7 @@ http://example.com/stream3
                                             onCheckedChange={handleSelectAll}
                                         />
                                     </TableHead>
-                                    <TableHead className="h-12 px-4 text-left align-middle font-medium text-muted-foreground w-[250px]">Name / Category</TableHead>
+                                    <TableHead className="h-12 px-4 text-left align-middle font-medium text-muted-foreground w-[250px]">Name</TableHead>
                                     <TableHead className="pl-0">Links</TableHead>
                                     <TableHead className="w-[50px]"></TableHead>
                                 </TableRow>
@@ -672,36 +747,28 @@ http://example.com/stream3
                                                     />
                                                 </TableCell>
                                                 <TableCell className="p-4 align-middle [&:has([role=checkbox])]:pr-0 py-3 px-4 font-medium">
-                                                    <div className="flex flex-col gap-2">
-                                                        <div className="flex items-center gap-1">
-                                                            <span className="text-sm truncate max-w-[200px]" title={link.name}>{link.name}</span>
-                                                            <button
-                                                                className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 hover:bg-accent hover:text-accent-foreground h-6 w-6 flex-shrink-0"
-                                                                title="Edit name"
-                                                                onClick={() => {
-                                                                    const newName = prompt("Edit name:", link.name);
-                                                                    if (newName && newName !== link.name) handleNameBlur(link.id, newName);
-                                                                }}
-                                                            >
-                                                                <Pen className="h-3 w-3" />
-                                                            </button>
-                                                        </div>
-                                                        <Select
-                                                            value={link.category}
-                                                            onValueChange={(newCategory) => updateLinkCategory(link.id, link.category, newCategory)}
-                                                            disabled={isActionLoading}
+                                                    <div className="flex items-center gap-2">
+                                                        {(() => {
+                                                            const st = linkStatus[`${link.category}-${link.id}`];
+                                                            const dot = st === 'alive'
+                                                                ? 'bg-green-500'
+                                                                : st === 'dead'
+                                                                    ? 'bg-red-500'
+                                                                    : 'bg-muted-foreground/25';
+                                                            const tip = st === 'alive' ? 'الرابط يعمل' : st === 'dead' ? 'الرابط لا يعمل' : 'لم يُفحص بعد';
+                                                            return <span title={tip} className={`w-2 h-2 rounded-full shrink-0 ${dot}`} />;
+                                                        })()}
+                                                        <span className="text-sm truncate max-w-[200px]" title={link.name}>{link.name}</span>
+                                                        <button
+                                                            className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 hover:bg-accent hover:text-accent-foreground h-6 w-6 flex-shrink-0"
+                                                            title="Edit name"
+                                                            onClick={() => {
+                                                                const newName = prompt("Edit name:", link.name);
+                                                                if (newName && newName !== link.name) handleNameBlur(link.id, newName);
+                                                            }}
                                                         >
-                                                            <SelectTrigger className="w-[140px] h-8 text-xs bg-background border border-input">
-                                                                <SelectValue />
-                                                            </SelectTrigger>
-                                                            <SelectContent>
-                                                                {categories.map((category) => (
-                                                                    <SelectItem key={category} value={category}>
-                                                                        {category}
-                                                                    </SelectItem>
-                                                                ))}
-                                                            </SelectContent>
-                                                        </Select>
+                                                            <Pen className="h-3 w-3" />
+                                                        </button>
                                                     </div>
                                                 </TableCell>
                                                 <TableCell className="align-middle py-3 pr-4 pl-0">
